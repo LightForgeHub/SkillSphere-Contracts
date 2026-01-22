@@ -32,6 +32,7 @@ impl IdentityRegistryContract {
         contract::ban_expert(&env, &expert)
     }
 
+    /// Get the current status of an expert
     pub fn get_status(env: Env, expert: Address) -> ExpertStatus {
         contract::get_expert_status(&env, &expert)
     }

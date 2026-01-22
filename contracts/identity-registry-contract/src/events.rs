@@ -11,7 +11,7 @@ pub struct ExpertStatusChangedEvent {
     pub admin: Address,
 }
 
-// Helper function to emit the event
+// Helper function to emit the status change event
 pub fn emit_status_change(
     env: &Env,
     expert: Address,

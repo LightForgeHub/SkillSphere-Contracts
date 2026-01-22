@@ -23,20 +23,24 @@ const LEDGERS_EXTEND_TO: u32 = 6_300_000; // ~1 year
 
 // ... [Admin Helpers] ...
 
+/// Check if the admin has been set
 pub fn has_admin(env: &Env) -> bool {
     env.storage().instance().has(&DataKey::Admin)
 }
 
+/// Set the admin address
 pub fn set_admin(env: &Env, admin: &Address) {
     env.storage().instance().set(&DataKey::Admin, admin);
 }
 
+/// Get the admin address
 pub fn get_admin(env: &Env) -> Option<Address> {
     env.storage().instance().get(&DataKey::Admin)
 }
 
 // ... [Expert Helpers] ...
 
+/// Set the expert record with status and timestamp
 pub fn set_expert_record(env: &Env, expert: &Address, status: ExpertStatus) {
     let key = DataKey::Expert(expert.clone());
 
@@ -56,6 +60,7 @@ pub fn set_expert_record(env: &Env, expert: &Address, status: ExpertStatus) {
         .extend_ttl(&key, LEDGERS_THRESHOLD, LEDGERS_EXTEND_TO);
 }
 
+/// Get the expert record, extending TTL if exists
 pub fn get_expert_record(env: &Env, expert: &Address) -> ExpertRecord {
     let key = DataKey::Expert(expert.clone());
 
@@ -76,6 +81,7 @@ pub fn get_expert_record(env: &Env, expert: &Address) -> ExpertRecord {
         })
 }
 
+/// Get the expert status
 pub fn get_expert_status(env: &Env, expert: &Address) -> ExpertStatus {
     get_expert_record(env, expert).status
 }
