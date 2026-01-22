@@ -15,4 +15,5 @@ pub enum RegistryError {
     ExpertNotFound = 4,
     AlreadyVerified = 5,
     AlreadyBanned = 6,
+    ExpertVecMax = 7,
 }

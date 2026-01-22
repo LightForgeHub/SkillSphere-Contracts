@@ -8,8 +8,8 @@ mod types;
 #[cfg(test)]
 mod test;
 
-use soroban_sdk::{contract, contractimpl, Address, Env};
-use crate::error::RegistryError;
+use soroban_sdk::{contract, contractimpl, Address, Env, Vec};
+use crate::{error::RegistryError};
 
 #[contract]
 pub struct IdentityRegistryContract;
@@ -21,6 +21,11 @@ impl IdentityRegistryContract {
         contract::initialize_registry(&env, &admin)
     }
 
+  /// Batch Add an expert to the whitelist (Admin only)
+    pub fn batch_add_experts(env: Env, experts: Vec<Address>) -> Result<(), RegistryError> {
+        contract::batch_add_experts(env, experts)
+    }
+    
     /// Add an expert to the whitelist (Admin only)
     pub fn add_expert(env: Env, expert: Address) -> Result<(), RegistryError> {
         contract::verify_expert(&env, &expert)
