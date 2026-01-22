@@ -22,22 +22,6 @@ fn test_initialization() {
 }
 
 #[test]
-fn test_batch_verification() {
-    let env = Env::default();
-    env.mock_all_auths();
-
-    let contract_id = env.register_contract(None, IdentityRegistryContract);
-    let client = IdentityRegistryContractClient::new(&env, &contract_id);
-
-    let admin = soroban_sdk::Address::generate(&env);
-    client.init(&admin);
-
-    let experts = vec![&env, Address::generate(&env), Address::generate(&env), Address::generate(&env)];
-
-    client.batch_add_experts(&experts);
-}
-
-#[test]
 #[should_panic]
 fn test_batch_verification_no_admin() {
     let env = Env::default();
@@ -61,7 +45,7 @@ fn test_batch_verification_check_status() {
     let admin = soroban_sdk::Address::generate(&env);
     client.init(&admin);
 
-    let e1 = Address::generate(&env);
+    let e1: Address = Address::generate(&env);
     let e2 = Address::generate(&env);
     let e3 = Address::generate(&env);
     let e4 = Address::generate(&env);
