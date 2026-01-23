@@ -1,4 +1,5 @@
 use soroban_sdk::{contracttype, Address, Env};
+use crate::types::{BookingRecord, BookingStatus};
 
 #[contracttype]
 #[derive(Clone)]
@@ -6,27 +7,8 @@ pub enum DataKey {
     Admin,
     Token,
     Oracle,
-    Booking(u64), // Booking ID -> Booking
+    Booking(u64), // Booking ID -> BookingRecord
     BookingCounter, // Counter for generating unique booking IDs
-}
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum BookingStatus {
-    Pending,
-    Complete,
-}
-
-#[contracttype]
-#[derive(Clone, Debug)]
-pub struct Booking {
-    pub id: u64,
-    pub expert: Address,
-    pub user: Address,
-    pub rate: i128,           // Payment per second
-    pub total_deposit: i128,  // Total amount deposited by user
-    pub booked_duration: u64, // Booked duration in seconds
-    pub status: BookingStatus,
 }
 
 // --- Admin ---
@@ -73,13 +55,13 @@ pub fn get_next_booking_id(env: &Env) -> u64 {
 }
 
 // --- Bookings ---
-pub fn save_booking(env: &Env, booking: &Booking) {
+pub fn save_booking(env: &Env, booking: &BookingRecord) {
     env.storage()
         .persistent()
         .set(&DataKey::Booking(booking.id), booking);
 }
 
-pub fn get_booking(env: &Env, booking_id: u64) -> Option<Booking> {
+pub fn get_booking(env: &Env, booking_id: u64) -> Option<BookingRecord> {
     env.storage()
         .persistent()
         .get(&DataKey::Booking(booking_id))
