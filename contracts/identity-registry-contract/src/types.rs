@@ -1,4 +1,4 @@
-use soroban_sdk::{contracttype, Address};
+use soroban_sdk::contracttype;
 
 // 1. Expert Status Enum
 #[contracttype]

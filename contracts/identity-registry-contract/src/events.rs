@@ -1,5 +1,5 @@
-use soroban_sdk::{contracttype, Address, Env, Symbol};
 use crate::types::ExpertStatus;
+use soroban_sdk::{contracttype, Address, Env, Symbol};
 
 // The Event Data Structure
 #[contracttype]
@@ -11,13 +11,13 @@ pub struct ExpertStatusChangedEvent {
     pub admin: Address,
 }
 
-// Helper function to emit the event
+// Helper function to emit the status change event
 pub fn emit_status_change(
-    env: &Env, 
-    expert: Address, 
-    old_status: ExpertStatus, 
-    new_status: ExpertStatus, 
-    admin: Address
+    env: &Env,
+    expert: Address,
+    old_status: ExpertStatus,
+    new_status: ExpertStatus,
+    admin: Address,
 ) {
     let event = ExpertStatusChangedEvent {
         expert,
@@ -25,7 +25,8 @@ pub fn emit_status_change(
         new_status,
         admin,
     };
-    
+
     // We publish with the topic "status_change" so indexers can find it easily
-    env.events().publish((Symbol::new(env, "status_change"),), event);
+    env.events()
+        .publish((Symbol::new(env, "status_change"),), event);
 }

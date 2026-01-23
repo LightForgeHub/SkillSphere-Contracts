@@ -1,12 +1,12 @@
+use crate::types::{ExpertRecord, ExpertStatus};
 use soroban_sdk::{contracttype, Address, Env};
-use crate::types::{ExpertStatus, ExpertRecord};
 
 // 1. Data Keys
 #[contracttype]
 #[derive(Clone)]
 pub enum DataKey {
-    Admin,              
-    Expert(Address),    
+    Admin,
+    Expert(Address),
 }
 
 // Constants for TTL (Time To Live)
@@ -23,23 +23,27 @@ const LEDGERS_EXTEND_TO: u32 = 6_300_000; // ~1 year
 
 // ... [Admin Helpers] ...
 
+/// Check if the admin has been set
 pub fn has_admin(env: &Env) -> bool {
     env.storage().instance().has(&DataKey::Admin)
 }
 
+/// Set the admin address
 pub fn set_admin(env: &Env, admin: &Address) {
     env.storage().instance().set(&DataKey::Admin, admin);
 }
 
+/// Get the admin address
 pub fn get_admin(env: &Env) -> Option<Address> {
     env.storage().instance().get(&DataKey::Admin)
 }
 
 // ... [Expert Helpers] ...
 
+/// Set the expert record with status and timestamp
 pub fn set_expert_record(env: &Env, expert: &Address, status: ExpertStatus) {
     let key = DataKey::Expert(expert.clone());
-    
+
     let record = ExpertRecord {
         status,
         updated_at: env.ledger().timestamp(),
@@ -49,26 +53,23 @@ pub fn set_expert_record(env: &Env, expert: &Address, status: ExpertStatus) {
     env.storage().persistent().set(&key, &record);
 
     // 2. Extend the TTL
-    // This tells the network: "If this data is going to die in less than 2 months, 
+    // This tells the network: "If this data is going to die in less than 2 months,
     // extend its life to 1 full year from now."
-    env.storage().persistent().extend_ttl(
-        &key, 
-        LEDGERS_THRESHOLD, 
-        LEDGERS_EXTEND_TO
-    );
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, LEDGERS_THRESHOLD, LEDGERS_EXTEND_TO);
 }
 
+/// Get the expert record, extending TTL if exists
 pub fn get_expert_record(env: &Env, expert: &Address) -> ExpertRecord {
     let key = DataKey::Expert(expert.clone());
-    
+
     // We also bump TTL on reads
     // If an expert is being checked frequently, they should stay alive.
     if env.storage().persistent().has(&key) {
-        env.storage().persistent().extend_ttl(
-            &key, 
-            LEDGERS_THRESHOLD, 
-            LEDGERS_EXTEND_TO
-        );
+        env.storage()
+            .persistent()
+            .extend_ttl(&key, LEDGERS_THRESHOLD, LEDGERS_EXTEND_TO);
     }
 
     env.storage()
@@ -80,6 +81,7 @@ pub fn get_expert_record(env: &Env, expert: &Address) -> ExpertRecord {
         })
 }
 
+/// Get the expert status
 pub fn get_expert_status(env: &Env, expert: &Address) -> ExpertStatus {
     get_expert_record(env, expert).status
 }

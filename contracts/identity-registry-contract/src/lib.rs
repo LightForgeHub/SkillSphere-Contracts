@@ -4,12 +4,13 @@ mod contract;
 mod error;
 mod events;
 mod storage;
-mod types;
 #[cfg(test)]
 mod test;
+mod types;
 
-use soroban_sdk::{contract, contractimpl, Address, Env, Vec};
-use crate::{error::RegistryError};
+use crate::error::RegistryError;
+use crate::types::ExpertStatus;
+use soroban_sdk::{contract, contractimpl, Address, Env,Vec};
 
 #[contract]
 pub struct IdentityRegistryContract;
@@ -29,5 +30,15 @@ impl IdentityRegistryContract {
     /// Add an expert to the whitelist (Admin only)
     pub fn add_expert(env: Env, expert: Address) -> Result<(), RegistryError> {
         contract::verify_expert(&env, &expert)
+    }
+
+    /// Ban an expert and revoke their verification status (Admin only)
+    pub fn ban_expert(env: Env, expert: Address) -> Result<(), RegistryError> {
+        contract::ban_expert(&env, &expert)
+    }
+
+    /// Get the current status of an expert
+    pub fn get_status(env: Env, expert: Address) -> ExpertStatus {
+        contract::get_expert_status(&env, &expert)
     }
 }
