@@ -88,3 +88,9 @@ pub fn ban_expert(env: &Env, expert: &Address) -> Result<(), RegistryError> {
 pub fn get_expert_status(env: &Env, expert: &Address) -> ExpertStatus {
     storage::get_expert_status(env, expert)
 }
+
+/// Check if an expert is verified
+/// Returns true only if the expert's status is Verified
+pub fn is_verified(env: &Env, expert: &Address) -> bool {
+    storage::get_expert_status(env, expert) == ExpertStatus::Verified
+}

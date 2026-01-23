@@ -41,4 +41,10 @@ impl IdentityRegistryContract {
     pub fn get_status(env: Env, expert: Address) -> ExpertStatus {
         contract::get_expert_status(&env, &expert)
     }
+
+    /// Check if an expert is verified
+    /// Returns true only if the expert's status is Verified
+    pub fn is_verified(env: Env, expert: Address) -> bool {
+        contract::is_verified(&env, &expert)
+    }
 }
