@@ -1,5 +1,6 @@
 use soroban_sdk::{Address, Env, token};
-use crate::storage::{self, Booking, BookingStatus};
+use crate::storage;
+use crate::types::{BookingRecord, BookingStatus};
 use crate::error::VaultError;
 use crate::events;
 
@@ -22,23 +23,23 @@ pub fn initialize_vault(
     Ok(())
 }
 
-pub fn create_booking(
+pub fn book_session(
     env: &Env,
     user: &Address,
     expert: &Address,
-    rate: i128,
-    booked_duration: u64,
+    rate_per_second: i128,
+    max_duration: u64,
 ) -> Result<u64, VaultError> {
     // Require authorization from the user creating the booking
     user.require_auth();
 
     // Validate rate
-    if rate <= 0 {
+    if rate_per_second <= 0 {
         return Err(VaultError::InvalidAmount);
     }
 
     // Calculate total deposit
-    let total_deposit = rate * (booked_duration as i128);
+    let total_deposit = rate_per_second * (max_duration as i128);
 
     if total_deposit <= 0 {
         return Err(VaultError::InvalidAmount);
@@ -54,18 +55,21 @@ pub fn create_booking(
 
     // Generate booking ID and create booking
     let booking_id = storage::get_next_booking_id(env);
-    let booking = Booking {
+    let booking = BookingRecord {
         id: booking_id,
-        expert: expert.clone(),
         user: user.clone(),
-        rate,
+        expert: expert.clone(),
+        rate_per_second,
+        max_duration,
         total_deposit,
-        booked_duration,
         status: BookingStatus::Pending,
     };
 
     // Save booking
     storage::save_booking(env, &booking);
+
+    // Emit event for booking creation
+    events::booking_created(env, booking_id, user, expert, total_deposit);
 
     Ok(booking_id)
 }
@@ -89,7 +93,7 @@ pub fn finalize_session(
     }
 
     // 4. Calculate payments
-    let expert_pay = booking.rate * (actual_duration as i128);
+    let expert_pay = booking.rate_per_second * (actual_duration as i128);
     let refund = booking.total_deposit - expert_pay;
 
     // Ensure calculations are valid
