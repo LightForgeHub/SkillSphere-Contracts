@@ -3,7 +3,6 @@
 extern crate std;
 
 use crate::error::RegistryError;
-use crate::types::ExpertStatus;
 use crate::{IdentityRegistryContract, IdentityRegistryContractClient};
 use crate::{storage, types::ExpertStatus};
 use soroban_sdk::{Env, testutils::Address as _, Symbol, Address, IntoVal, TryIntoVal, Vec, vec};
