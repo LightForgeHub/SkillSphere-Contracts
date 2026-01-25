@@ -67,6 +67,10 @@ pub fn create_booking(
     // Save booking
     storage::save_booking(env, &booking);
 
+    // Add booking to user and expert lists
+    storage::add_booking_to_user_list(env, user, booking_id);
+    storage::add_booking_to_expert_list(env, expert, booking_id);
+
     Ok(booking_id)
 }
 

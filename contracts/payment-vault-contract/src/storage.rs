@@ -8,6 +8,8 @@ pub enum DataKey {
     Oracle,
     Booking(u64), // Booking ID -> Booking
     BookingCounter, // Counter for generating unique booking IDs
+    UserBookings(Address), // User Address -> Vec<u64> of booking IDs
+    ExpertBookings(Address), // Expert Address -> Vec<u64> of booking IDs
 }
 
 #[contracttype]
@@ -90,4 +92,47 @@ pub fn update_booking_status(env: &Env, booking_id: u64, status: BookingStatus) 
         booking.status = status;
         save_booking(env, &booking);
     }
+}
+
+// --- User and Expert Booking Lists ---
+pub fn add_booking_to_user_list(env: &Env, user: &Address, booking_id: u64) {
+    let mut user_bookings: soroban_sdk::Vec<u64> = env
+        .storage()
+        .persistent()
+        .get(&DataKey::UserBookings(user.clone()))
+        .unwrap_or(soroban_sdk::Vec::new(env));
+
+    user_bookings.push_back(booking_id);
+
+    env.storage()
+        .persistent()
+        .set(&DataKey::UserBookings(user.clone()), &user_bookings);
+}
+
+pub fn add_booking_to_expert_list(env: &Env, expert: &Address, booking_id: u64) {
+    let mut expert_bookings: soroban_sdk::Vec<u64> = env
+        .storage()
+        .persistent()
+        .get(&DataKey::ExpertBookings(expert.clone()))
+        .unwrap_or(soroban_sdk::Vec::new(env));
+
+    expert_bookings.push_back(booking_id);
+
+    env.storage()
+        .persistent()
+        .set(&DataKey::ExpertBookings(expert.clone()), &expert_bookings);
+}
+
+pub fn get_user_bookings(env: &Env, user: &Address) -> soroban_sdk::Vec<u64> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::UserBookings(user.clone()))
+        .unwrap_or(soroban_sdk::Vec::new(env))
+}
+
+pub fn get_expert_bookings(env: &Env, expert: &Address) -> soroban_sdk::Vec<u64> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::ExpertBookings(expert.clone()))
+        .unwrap_or(soroban_sdk::Vec::new(env))
 }
