@@ -54,11 +54,11 @@ fn test_partial_duration_scenario() {
     let client = create_client(&env);
     client.init(&admin, &token.address, &oracle);
 
-    // Create booking: rate = 10 tokens/second, duration = 100 seconds
+    // Book session: rate = 10 tokens/second, max_duration = 100 seconds
     // Total deposit = 10 * 100 = 1000 tokens
-    let rate = 10_i128;
-    let booked_duration = 100_u64;
-    let booking_id = client.create_booking(&user, &expert, &rate, &booked_duration);
+    let rate_per_second = 10_i128;
+    let max_duration = 100_u64;
+    let booking_id = client.book_session(&user, &expert, &rate_per_second, &max_duration);
 
     // Verify user's balance decreased
     assert_eq!(token.balance(&user), 9_000);
@@ -91,10 +91,10 @@ fn test_full_duration_no_refund() {
     let client = create_client(&env);
     client.init(&admin, &token.address, &oracle);
 
-    // Create booking
-    let rate = 10_i128;
-    let booked_duration = 100_u64;
-    let booking_id = client.create_booking(&user, &expert, &rate, &booked_duration);
+    // Book session
+    let rate_per_second = 10_i128;
+    let max_duration = 100_u64;
+    let booking_id = client.book_session(&user, &expert, &rate_per_second, &max_duration);
 
     // Oracle finalizes with full duration (100 seconds)
     let actual_duration = 100_u64;
@@ -123,9 +123,9 @@ fn test_double_finalization_protection() {
     let client = create_client(&env);
     client.init(&admin, &token.address, &oracle);
 
-    let rate = 10_i128;
-    let booked_duration = 100_u64;
-    let booking_id = client.create_booking(&user, &expert, &rate, &booked_duration);
+    let rate_per_second = 10_i128;
+    let max_duration = 100_u64;
+    let booking_id = client.book_session(&user, &expert, &rate_per_second, &max_duration);
 
     // First finalization succeeds
     let actual_duration = 50_u64;
@@ -154,9 +154,9 @@ fn test_oracle_authorization_enforcement() {
     let client = create_client(&env);
     client.init(&admin, &token.address, &oracle);
 
-    let rate = 10_i128;
-    let booked_duration = 100_u64;
-    let booking_id = client.create_booking(&user, &expert, &rate, &booked_duration);
+    let rate_per_second = 10_i128;
+    let max_duration = 100_u64;
+    let booking_id = client.book_session(&user, &expert, &rate_per_second, &max_duration);
 
     // Clear all mocked auths to test Oracle authorization
     env.set_auths(&[]);
@@ -190,9 +190,9 @@ fn test_zero_duration_finalization() {
     let client = create_client(&env);
     client.init(&admin, &token.address, &oracle);
 
-    let rate = 10_i128;
-    let booked_duration = 100_u64;
-    let booking_id = client.create_booking(&user, &expert, &rate, &booked_duration);
+    let rate_per_second = 10_i128;
+    let max_duration = 100_u64;
+    let booking_id = client.book_session(&user, &expert, &rate_per_second, &max_duration);
 
     // Oracle finalizes with 0 duration (session cancelled)
     let actual_duration = 0_u64;
@@ -222,6 +222,60 @@ fn test_booking_not_found() {
 }
 
 #[test]
+fn test_book_session_balance_transfer() {
+    // This test specifically verifies the acceptance criteria from Issue #6:
+    // - User's balance decreases
+    // - Contract's balance increases
+    // - Booking ID is unique and retrievable
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let expert = Address::generate(&env);
+    let oracle = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let token = create_token_contract(&env, &token_admin);
+
+    // Initial balance
+    let initial_balance = 5_000_i128;
+    token.mint(&user, &initial_balance);
+
+    let client = create_client(&env);
+    client.init(&admin, &token.address, &oracle);
+
+    // Book session with specific deposit
+    let rate_per_second = 5_i128;
+    let max_duration = 200_u64;
+    let expected_deposit = rate_per_second * (max_duration as i128); // 1000 tokens
+
+    // Verify initial state
+    assert_eq!(token.balance(&user), initial_balance);
+    assert_eq!(token.balance(&client.address), 0);
+
+    // Book session
+    let booking_id = client.book_session(&user, &expert, &rate_per_second, &max_duration);
+
+    // Acceptance Criteria #1: User's balance decreases
+    assert_eq!(token.balance(&user), initial_balance - expected_deposit);
+
+    // Acceptance Criteria #2: Contract's balance increases
+    assert_eq!(token.balance(&client.address), expected_deposit);
+
+    // Acceptance Criteria #3: Booking ID is unique (first booking should be ID 1)
+    assert_eq!(booking_id, 1);
+
+    // Create another booking to verify uniqueness
+    token.mint(&user, &expected_deposit); // Mint more tokens for second booking
+    let booking_id_2 = client.book_session(&user, &expert, &rate_per_second, &max_duration);
+
+    // Second booking should have different ID
+    assert_eq!(booking_id_2, 2);
+    assert_ne!(booking_id, booking_id_2);
+}
+
+#[test]
 fn test_get_user_and_expert_bookings() {
     let env = Env::default();
     env.mock_all_auths();
@@ -240,10 +294,10 @@ fn test_get_user_and_expert_bookings() {
     client.init(&admin, &token.address, &oracle);
 
     // Create 2 bookings for the same user with different experts
-    let rate = 10_i128;
-    let booked_duration = 100_u64;
-    let booking_id_1 = client.create_booking(&user, &expert1, &rate, &booked_duration);
-    let booking_id_2 = client.create_booking(&user, &expert2, &rate, &booked_duration);
+    let rate_per_second = 10_i128;
+    let max_duration = 100_u64;
+    let booking_id_1 = client.book_session(&user, &expert1, &rate_per_second, &max_duration);
+    let booking_id_2 = client.book_session(&user, &expert2, &rate_per_second, &max_duration);
 
     // Test get_user_bookings - should return 2 bookings
     let user_bookings = client.get_user_bookings(&user);
@@ -268,7 +322,7 @@ fn test_get_user_and_expert_bookings() {
     assert_eq!(booking_1.id, booking_id_1);
     assert_eq!(booking_1.user, user);
     assert_eq!(booking_1.expert, expert1);
-    assert_eq!(booking_1.rate, rate);
+    assert_eq!(booking_1.rate_per_second, rate_per_second);
 
     // Test get_booking for non-existent booking
     let non_existent = client.get_booking(&999);

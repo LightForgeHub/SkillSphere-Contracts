@@ -4,12 +4,13 @@ mod contract;
 mod error;
 mod events;
 mod storage;
+mod types;
 #[cfg(test)]
 mod test;
 
 use soroban_sdk::{contract, contractimpl, Address, Env, Vec};
 use crate::error::VaultError;
-use crate::storage::Booking;
+use crate::types::BookingRecord;
 
 #[contract]
 pub struct PaymentVaultContract;
@@ -26,16 +27,16 @@ impl PaymentVaultContract {
         contract::initialize_vault(&env, &admin, &token, &oracle)
     }
 
-    /// Create a booking for a consultation session
-    /// User deposits tokens upfront based on rate * booked_duration
-    pub fn create_booking(
+    /// Book a session with an expert
+    /// User deposits tokens upfront based on rate_per_second * max_duration
+    pub fn book_session(
         env: Env,
         user: Address,
         expert: Address,
-        rate: i128,
-        booked_duration: u64,
+        rate_per_second: i128,
+        max_duration: u64,
     ) -> Result<u64, VaultError> {
-        contract::create_booking(&env, &user, &expert, rate, booked_duration)
+        contract::book_session(&env, &user, &expert, rate_per_second, max_duration)
     }
 
     /// Finalize a session (Oracle-only)
@@ -59,7 +60,7 @@ impl PaymentVaultContract {
     }
 
     /// Get booking details by booking ID (read-only)
-    pub fn get_booking(env: Env, booking_id: u64) -> Option<Booking> {
+    pub fn get_booking(env: Env, booking_id: u64) -> Option<BookingRecord> {
         storage::get_booking(&env, booking_id)
     }
 }

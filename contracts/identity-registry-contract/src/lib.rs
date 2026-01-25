@@ -26,7 +26,12 @@ impl IdentityRegistryContract {
     pub fn batch_add_experts(env: Env, experts: Vec<Address>) -> Result<(), RegistryError> {
         contract::batch_add_experts(env, experts)
     }
-    
+
+    /// Batch ban experts and revoke their verification status (Admin only)
+    pub fn batch_ban_experts(env: Env, experts: Vec<Address>) -> Result<(), RegistryError> {
+        contract::batch_ban_experts(env, experts)
+    }
+
     /// Add an expert to the whitelist (Admin only)
     pub fn add_expert(env: Env, expert: Address) -> Result<(), RegistryError> {
         contract::verify_expert(&env, &expert)

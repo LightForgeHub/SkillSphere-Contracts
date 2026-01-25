@@ -35,7 +35,28 @@ pub fn batch_add_experts(env:Env, experts: Vec<Address>) -> Result<(), RegistryE
 
     Ok(())
 }
-    
+
+/// Batch ban experts by setting their status to Banned (Admin only)
+pub fn batch_ban_experts(env: Env, experts: Vec<Address>) -> Result<(), RegistryError> {
+    if experts.len() > 20 {
+        return Err(RegistryError::ExpertVecMax);
+    }
+
+    let admin = storage::get_admin(&env).ok_or(RegistryError::NotInitialized)?;
+    admin.require_auth();
+
+    for expert in experts {
+        let status = storage::get_expert_status(&env, &expert);
+        if status == ExpertStatus::Banned {
+            return Err(RegistryError::AlreadyBanned);
+        }
+        storage::set_expert_record(&env, &expert, ExpertStatus::Banned);
+        events::emit_status_change(&env, expert, status, ExpertStatus::Banned, admin.clone());
+    }
+
+    Ok(())
+}
+
 pub fn verify_expert(env: &Env, expert: &Address) -> Result<(), RegistryError> {
     let admin = storage::get_admin(env).ok_or(RegistryError::NotInitialized)?;
 
