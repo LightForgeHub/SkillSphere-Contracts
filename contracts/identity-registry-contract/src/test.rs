@@ -330,3 +330,31 @@ fn test_complete_expert_lifecycle() {
     client.ban_expert(&expert);
     assert_eq!(client.get_status(&expert), ExpertStatus::Banned);
 }
+
+#[test]
+fn test_getters() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(IdentityRegistryContract, ());
+    let client = IdentityRegistryContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    client.init(&admin);
+
+    // Test 1: Check is_verified on a random address (should be false)
+    let random_address = Address::generate(&env);
+    assert_eq!(client.is_verified(&random_address), false);
+    assert_eq!(client.get_status(&random_address), ExpertStatus::Unverified);
+
+    // Test 2: Verify an expert and check is_verified (should be true)
+    let expert = Address::generate(&env);
+    client.add_expert(&expert);
+    assert_eq!(client.is_verified(&expert), true);
+    assert_eq!(client.get_status(&expert), ExpertStatus::Verified);
+
+    // Test 3: Ban the expert and check is_verified (should be false)
+    client.ban_expert(&expert);
+    assert_eq!(client.is_verified(&expert), false);
+    assert_eq!(client.get_status(&expert), ExpertStatus::Banned);
+}
