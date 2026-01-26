@@ -15,6 +15,7 @@ pub enum DataKey {
 pub enum BookingStatus {
     Pending,
     Complete,
+    Reclaimed,
 }
 
 #[contracttype]
@@ -27,6 +28,7 @@ pub struct Booking {
     pub total_deposit: i128,  // Total amount deposited by user
     pub booked_duration: u64, // Booked duration in seconds
     pub status: BookingStatus,
+    pub created_at: u64,      // Ledger timestamp when booking was created
 }
 
 // --- Admin ---
