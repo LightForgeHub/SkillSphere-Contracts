@@ -1,4 +1,4 @@
-use soroban_sdk::{Address, Env, Vec};
+use soroban_sdk::{Address, Env, Vec, String};
 use crate::storage;
 use crate::events;
 use crate::{error::RegistryError, types::ExpertStatus};
@@ -29,7 +29,9 @@ pub fn batch_add_experts(env:Env, experts: Vec<Address>) -> Result<(), RegistryE
         if status == ExpertStatus::Verified {
             return Err(RegistryError::AlreadyVerified);
         }
-        storage::set_expert_record(&env, &expert, ExpertStatus::Verified);
+        // Default empty URI for batch adds
+        let empty_uri = String::from_str(&env, "");
+        storage::set_expert_record(&env, &expert, ExpertStatus::Verified, empty_uri);
         events::emit_status_change(&env, expert, status, ExpertStatus::Verified, admin.clone());
     }
 
@@ -50,14 +52,15 @@ pub fn batch_ban_experts(env: Env, experts: Vec<Address>) -> Result<(), Registry
         if status == ExpertStatus::Banned {
             return Err(RegistryError::AlreadyBanned);
         }
-        storage::set_expert_record(&env, &expert, ExpertStatus::Banned);
+        let existing = storage::get_expert_record(&env, &expert);
+        storage::set_expert_record(&env, &expert, ExpertStatus::Banned, existing.data_uri);
         events::emit_status_change(&env, expert, status, ExpertStatus::Banned, admin.clone());
     }
 
     Ok(())
 }
 
-pub fn verify_expert(env: &Env, expert: &Address) -> Result<(), RegistryError> {
+pub fn verify_expert(env: &Env, expert: &Address, data_uri: String) -> Result<(), RegistryError> {
     let admin = storage::get_admin(env).ok_or(RegistryError::NotInitialized)?;
 
     admin.require_auth();
@@ -68,7 +71,12 @@ pub fn verify_expert(env: &Env, expert: &Address) -> Result<(), RegistryError> {
         return Err(RegistryError::AlreadyVerified);
     }
 
-    storage::set_expert_record(env, expert, ExpertStatus::Verified);
+    // Validate URI length (limit ~64 chars)
+    if data_uri.len() > 64 {
+        return Err(RegistryError::UriTooLong);
+    }
+
+    storage::set_expert_record(env, expert, ExpertStatus::Verified, data_uri);
 
     events::emit_status_change(
         env,
@@ -92,7 +100,9 @@ pub fn ban_expert(env: &Env, expert: &Address) -> Result<(), RegistryError> {
         return Err(RegistryError::AlreadyBanned);
     }
 
-    storage::set_expert_record(env, expert, ExpertStatus::Banned);
+    // Preserve existing data_uri when banning
+    let existing = storage::get_expert_record(env, expert);
+    storage::set_expert_record(env, expert, ExpertStatus::Banned, existing.data_uri);
 
     events::emit_status_change(
         env,
@@ -114,4 +124,24 @@ pub fn get_expert_status(env: &Env, expert: &Address) -> ExpertStatus {
 /// Returns true only if the expert's status is Verified
 pub fn is_verified(env: &Env, expert: &Address) -> bool {
     storage::get_expert_status(env, expert) == ExpertStatus::Verified
+}
+
+/// Allow a verified expert to update their own profile URI
+pub fn update_profile(env: &Env, expert: &Address, new_uri: String) -> Result<(), RegistryError> {
+    expert.require_auth();
+
+    // Validate URI length
+    if new_uri.len() > 64 {
+        return Err(RegistryError::UriTooLong);
+    }
+
+    let status = storage::get_expert_status(env, expert);
+    if status != ExpertStatus::Verified {
+        return Err(RegistryError::NotVerified);
+    }
+
+    // Update record preserving status
+    storage::set_expert_record(env, expert, status, new_uri.clone());
+    events::emit_profile_updated(env, expert.clone(), new_uri);
+    Ok(())
 }
