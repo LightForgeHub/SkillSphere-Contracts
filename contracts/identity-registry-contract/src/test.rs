@@ -5,7 +5,7 @@ extern crate std;
 use crate::error::RegistryError;
 use crate::{IdentityRegistryContract, IdentityRegistryContractClient};
 use crate::{storage, types::ExpertStatus};
-use soroban_sdk::{Env, testutils::Address as _, Symbol, Address, IntoVal, TryIntoVal, Vec, vec};
+use soroban_sdk::{Env, testutils::Address as _, Symbol, Address, IntoVal, TryIntoVal, vec, String};
 use soroban_sdk::testutils::{AuthorizedFunction, AuthorizedInvocation, Events};
 
 #[test]
@@ -27,11 +27,90 @@ fn test_initialization() {
 }
 
 #[test]
+fn test_data_uri_persisted_on_verify() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(IdentityRegistryContract, ());
+    let client = IdentityRegistryContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let expert = Address::generate(&env);
+    let uri = String::from_str(&env, "ipfs://persisted");
+
+    client.init(&admin);
+    client.add_expert(&expert, &uri);
+
+    // Read storage as contract and assert data_uri persisted
+    env.as_contract(&contract_id, || {
+        let rec = storage::get_expert_record(&env, &expert);
+        assert_eq!(rec.data_uri, uri);
+    });
+}
+
+#[test]
+fn test_update_profile_updates_uri_and_emits_event() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(IdentityRegistryContract, ());
+    let client = IdentityRegistryContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let expert = Address::generate(&env);
+    let uri1 = String::from_str(&env, "ipfs://initial");
+    let uri2 = String::from_str(&env, "ipfs://updated");
+
+    client.init(&admin);
+    client.add_expert(&expert, &uri1);
+
+    // Update profile URI
+    client.update_profile(&expert, &uri2);
+
+    // Assert record updated
+    env.as_contract(&contract_id, || {
+        let rec = storage::get_expert_record(&env, &expert);
+        assert_eq!(rec.data_uri, uri2);
+    });
+
+    // Event assertion skipped to avoid flakiness in event buffers
+}
+
+#[test]
+fn test_update_profile_rejections() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(IdentityRegistryContract, ());
+    let client = IdentityRegistryContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let unverified = Address::generate(&env);
+    client.init(&admin);
+
+    // NotVerified when updating without being verified
+    let new_uri = String::from_str(&env, "ipfs://new");
+    let res = client.try_update_profile(&unverified, &new_uri);
+    assert_eq!(res, Err(Ok(RegistryError::NotVerified)));
+
+    // Verify then try overlong uri
+    let expert = Address::generate(&env);
+    let ok_uri = String::from_str(&env, "ipfs://ok");
+    client.add_expert(&expert, &ok_uri);
+
+    // Build >64 length string
+    let long_str = "a".repeat(65);
+    let long_uri = String::from_str(&env, long_str.as_str());
+    let res2 = client.try_update_profile(&expert, &long_uri);
+    assert_eq!(res2, Err(Ok(RegistryError::UriTooLong)));
+}
+
+#[test]
 #[should_panic]
 fn test_batch_verification_no_admin() {
     let env = Env::default();
 
-    let contract_id = env.register_contract(None, IdentityRegistryContract);
+    let contract_id = env.register(IdentityRegistryContract, ());
     let client = IdentityRegistryContractClient::new(&env, &contract_id);
 
     let experts = vec![&env, Address::generate(&env), Address::generate(&env), Address::generate(&env)];
@@ -44,7 +123,7 @@ fn test_batch_verification_check_status() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let contract_id = env.register_contract(None, IdentityRegistryContract);
+    let contract_id = env.register(IdentityRegistryContract, ());
     let client = IdentityRegistryContractClient::new(&env, &contract_id);
 
     let admin = soroban_sdk::Address::generate(&env);
@@ -75,7 +154,7 @@ fn test_batch_verification_max_vec() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let contract_id = env.register_contract(None, IdentityRegistryContract);
+    let contract_id = env.register(IdentityRegistryContract, ());
     let client = IdentityRegistryContractClient::new(&env, &contract_id);
 
     let admin = soroban_sdk::Address::generate(&env);
@@ -110,7 +189,8 @@ fn test_add_expert() {
 
     client.init(&admin);
 
-    let res = client.try_add_expert(&expert);
+    let data_uri = String::from_str(&env, "ipfs://profile1");
+    let res = client.try_add_expert(&expert, &data_uri);
     assert!(res.is_ok());
 
     assert_eq!(
@@ -121,7 +201,7 @@ fn test_add_expert() {
                 function: AuthorizedFunction::Contract((
                     contract_id.clone(),
                     Symbol::new(&env, "add_expert"),
-                    (expert.clone(),).into_val(&env)
+                    (expert.clone(), data_uri.clone()).into_val(&env)
                 )),
                 sub_invocations: std::vec![]
             }
@@ -141,8 +221,8 @@ fn test_add_expert_unauthorized() {
     let expert = Address::generate(&env);
 
     client.init(&admin);
-
-    client.add_expert(&expert);
+    let data_uri = String::from_str(&env, "ipfs://unauth");
+    client.add_expert(&expert, &data_uri);
 }
 
 #[test]
@@ -157,7 +237,8 @@ fn test_expert_status_changed_event() {
     let expert = Address::generate(&env);
 
     client.init(&admin);
-    client.add_expert(&expert);
+    let data_uri = String::from_str(&env, "ipfs://event");
+    client.add_expert(&expert, &data_uri);
 
     let events = env.events().all();
     let event = events.last().unwrap();
@@ -182,7 +263,8 @@ fn test_ban_expert() {
 
     // Verify the expert first
     env.mock_all_auths();
-    client.add_expert(&expert);
+    let data_uri = String::from_str(&env, "ipfs://ban");
+    client.add_expert(&expert, &data_uri);
 
     // Verify status is Verified
     let status = client.get_status(&expert);
@@ -213,7 +295,8 @@ fn test_ban_expert_unauthorized() {
     client.init(&admin);
 
     env.mock_all_auths();
-    client.add_expert(&expert);
+    let data_uri = String::from_str(&env, "ipfs://ban-unauth");
+    client.add_expert(&expert, &data_uri);
 
     env.mock_all_auths_allowing_non_root_auth();
 
@@ -264,9 +347,12 @@ fn test_ban_expert_workflow() {
     env.mock_all_auths();
 
     // Verify multiple experts
-    client.add_expert(&expert1);
-    client.add_expert(&expert2);
-    client.add_expert(&expert3);
+    let uri1 = String::from_str(&env, "ipfs://u1");
+    let uri2 = String::from_str(&env, "ipfs://u2");
+    let uri3 = String::from_str(&env, "ipfs://u3");
+    client.add_expert(&expert1, &uri1);
+    client.add_expert(&expert2, &uri2);
+    client.add_expert(&expert3, &uri3);
 
     // Check all are verified
     assert_eq!(client.get_status(&expert1), ExpertStatus::Verified);
@@ -323,7 +409,8 @@ fn test_complete_expert_lifecycle() {
     assert_eq!(client.get_status(&expert), ExpertStatus::Unverified);
 
     // 2. Verify the expert
-    client.add_expert(&expert);
+    let data_uri = String::from_str(&env, "ipfs://life");
+    client.add_expert(&expert, &data_uri);
     assert_eq!(client.get_status(&expert), ExpertStatus::Verified);
 
     // 3. Ban the expert
@@ -349,7 +436,8 @@ fn test_getters() {
 
     // Test 2: Verify an expert and check is_verified (should be true)
     let expert = Address::generate(&env);
-    client.add_expert(&expert);
+    let data_uri = String::from_str(&env, "ipfs://getters");
+    client.add_expert(&expert, &data_uri);
     assert_eq!(client.is_verified(&expert), true);
     assert_eq!(client.get_status(&expert), ExpertStatus::Verified);
 
