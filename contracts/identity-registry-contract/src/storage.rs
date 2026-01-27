@@ -14,7 +14,7 @@ pub enum DataKey {
 // 1 Year in seconds = 31,536,000
 // 1 Year in ledgers = ~6,307,200 (approx)
 //
-// However, Soroban allows setting TTL logic relative to the current ledger.
+// Soroban allows setting TTL logic relative to the current ledger.
 // "Threshold": If remaining lifetime is less than this...
 // "Extend": ...bump it up to this amount.
 
