@@ -9,6 +9,8 @@ pub enum DataKey {
     Expert(Address),
 }
 
+// Constants for TTL (Time To Live)
+// Stellar ledgers close approx every 5 seconds.
 // 1 Year in seconds = 31,536,000
 // 1 Year in ledgers = ~6,307,200 (approx)
 //
@@ -16,8 +18,8 @@ pub enum DataKey {
 // "Threshold": If remaining lifetime is less than this...
 // "Extend": ...bump it up to this amount.
 
-const LEDGERS_THRESHOLD: u32 = 1_000_000; // ~2 months
-const LEDGERS_EXTEND_TO: u32 = 6_300_000; // ~1 year
+const LEDGERS_THRESHOLD: u32 = 1_000_000; // 2 months
+const LEDGERS_EXTEND_TO: u32 = 6_300_000; // 1 year
 
 // ... [Admin Helpers] ...
 
