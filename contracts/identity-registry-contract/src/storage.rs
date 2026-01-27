@@ -1,5 +1,5 @@
 use crate::types::{ExpertRecord, ExpertStatus};
-use soroban_sdk::{contracttype, Address, Env};
+use soroban_sdk::{contracttype, Address, Env, String};
 
 // 1. Data Keys
 #[contracttype]
@@ -40,13 +40,14 @@ pub fn get_admin(env: &Env) -> Option<Address> {
 
 // ... [Expert Helpers] ...
 
-/// Set the expert record with status and timestamp
-pub fn set_expert_record(env: &Env, expert: &Address, status: ExpertStatus) {
+/// Set the expert record with status, data_uri and timestamp
+pub fn set_expert_record(env: &Env, expert: &Address, status: ExpertStatus, data_uri: String) {
     let key = DataKey::Expert(expert.clone());
 
     let record = ExpertRecord {
         status,
         updated_at: env.ledger().timestamp(),
+        data_uri,
     };
 
     // 1. Save the data
@@ -78,6 +79,7 @@ pub fn get_expert_record(env: &Env, expert: &Address) -> ExpertRecord {
         .unwrap_or(ExpertRecord {
             status: ExpertStatus::Unverified,
             updated_at: 0,
+            data_uri: String::from_str(env, ""),
         })
 }
 
