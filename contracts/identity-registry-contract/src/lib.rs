@@ -10,7 +10,7 @@ mod types;
 
 use crate::error::RegistryError;
 use crate::types::ExpertStatus;
-use soroban_sdk::{contract, contractimpl, Address, Env,Vec};
+use soroban_sdk::{contract, contractimpl, Address, Env, Vec, String};
 
 #[contract]
 pub struct IdentityRegistryContract;
@@ -33,8 +33,9 @@ impl IdentityRegistryContract {
     }
 
     /// Add an expert to the whitelist (Admin only)
-    pub fn add_expert(env: Env, expert: Address) -> Result<(), RegistryError> {
-        contract::verify_expert(&env, &expert)
+    /// Also saves a profile data_uri reference (e.g., ipfs://...)
+    pub fn add_expert(env: Env, expert: Address, data_uri: String) -> Result<(), RegistryError> {
+        contract::verify_expert(&env, &expert, data_uri)
     }
 
     /// Ban an expert and revoke their verification status (Admin only)
@@ -51,5 +52,10 @@ impl IdentityRegistryContract {
     /// Returns true only if the expert's status is Verified
     pub fn is_verified(env: Env, expert: Address) -> bool {
         contract::is_verified(&env, &expert)
+    }
+
+    /// Allow a verified expert to update their own profile URI
+    pub fn update_profile(env: Env, expert: Address, new_uri: String) -> Result<(), RegistryError> {
+        contract::update_profile(&env, &expert, new_uri)
     }
 }
