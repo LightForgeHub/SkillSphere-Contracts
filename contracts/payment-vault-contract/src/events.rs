@@ -16,3 +16,9 @@ pub fn session_reclaimed(env: &Env, booking_id: u64, amount: i128) {
     let topics = (symbol_short!("reclaim"), booking_id);
     env.events().publish(topics, amount);
 }
+
+/// Emitted when an expert rejects a pending session
+pub fn session_rejected(env: &Env, booking_id: u64, reason: &str) {
+    let topics = (symbol_short!("reject"), booking_id);
+    env.events().publish(topics, reason);
+}

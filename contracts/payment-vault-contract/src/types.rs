@@ -7,7 +7,8 @@ use soroban_sdk::{contracttype, Address};
 pub enum BookingStatus {
     Pending = 0,
     Complete = 1,
-    Reclaimed = 2,
+    Rejected = 2,
+    Reclaimed = 3,
 }
 
 /// Record of a consultation booking with deposit locked

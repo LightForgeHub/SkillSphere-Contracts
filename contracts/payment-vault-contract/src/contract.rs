@@ -176,3 +176,40 @@ pub fn reclaim_stale_session(
 
     Ok(())
 }
+
+pub fn reject_session(
+    env: &Env,
+    expert: &Address,
+    booking_id: u64,
+) -> Result<(), VaultError> {
+    // 1. Require expert authorization
+    expert.require_auth();
+
+    // 2. Get booking and verify it exists
+    let booking = storage::get_booking(env, booking_id)
+        .ok_or(VaultError::BookingNotFound)?;
+
+    // 3. Verify the caller is the expert in the booking
+    if booking.expert != *expert {
+        return Err(VaultError::NotAuthorized);
+    }
+
+    // 4. Verify booking is in Pending status
+    if booking.status != BookingStatus::Pending {
+        return Err(VaultError::BookingNotPending);
+    }
+
+    // 5. Transfer total_deposit back to user
+    let token_address = storage::get_token(env);
+    let token_client = token::Client::new(env, &token_address);
+    let contract_address = env.current_contract_address();
+    token_client.transfer(&contract_address, &booking.user, &booking.total_deposit);
+
+    // 6. Update booking status to Rejected
+    storage::update_booking_status(env, booking_id, BookingStatus::Rejected);
+
+    // 7. Emit event
+    events::session_rejected(env, booking_id, "Expert declined session");
+
+    Ok(())
+}

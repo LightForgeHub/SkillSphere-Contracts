@@ -461,3 +461,181 @@ fn test_reclaim_already_finalized() {
     let result = client.try_reclaim_stale_session(&user, &booking_id);
     assert!(result.is_err());
 }
+
+#[test]
+fn test_expert_rejects_pending_session() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let expert = Address::generate(&env);
+    let oracle = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let token = create_token_contract(&env, &token_admin);
+    token.mint(&user, &10_000);
+
+    let client = create_client(&env);
+    client.init(&admin, &token.address, &oracle);
+
+    // Create booking
+    let rate_per_second = 10_i128;
+    let max_duration = 100_u64;
+    let booking_id = client.book_session(&user, &expert, &rate_per_second, &max_duration);
+
+    // Verify initial state
+    assert_eq!(token.balance(&user), 9_000);
+    assert_eq!(token.balance(&client.address), 1_000);
+
+    // Expert rejects the session
+    let result = client.try_reject_session(&expert, &booking_id);
+    assert!(result.is_ok());
+
+    // Verify user balance increased (full refund)
+    assert_eq!(token.balance(&user), 10_000);
+    assert_eq!(token.balance(&client.address), 0);
+    assert_eq!(token.balance(&expert), 0);
+
+    // Verify booking status is Rejected
+    let booking = client.get_booking(&booking_id).unwrap();
+    use crate::types::BookingStatus;
+    assert_eq!(booking.status, BookingStatus::Rejected);
+}
+
+#[test]
+fn test_user_cannot_reject_session() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let expert = Address::generate(&env);
+    let oracle = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let token = create_token_contract(&env, &token_admin);
+    token.mint(&user, &10_000);
+
+    let client = create_client(&env);
+    client.init(&admin, &token.address, &oracle);
+
+    let rate_per_second = 10_i128;
+    let max_duration = 100_u64;
+    let booking_id = client.book_session(&user, &expert, &rate_per_second, &max_duration);
+
+    // User tries to reject their own session (should fail - not authorized)
+    let result = client.try_reject_session(&user, &booking_id);
+    assert!(result.is_err());
+
+    // Verify funds still in contract
+    assert_eq!(token.balance(&client.address), 1_000);
+}
+
+#[test]
+fn test_reject_already_complete_session() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let expert = Address::generate(&env);
+    let oracle = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let token = create_token_contract(&env, &token_admin);
+    token.mint(&user, &10_000);
+
+    let client = create_client(&env);
+    client.init(&admin, &token.address, &oracle);
+
+    let rate_per_second = 10_i128;
+    let max_duration = 100_u64;
+    let booking_id = client.book_session(&user, &expert, &rate_per_second, &max_duration);
+
+    // Oracle finalizes the session
+    client.finalize_session(&booking_id, &50);
+
+    // Expert tries to reject after completion (should fail - not pending)
+    let result = client.try_reject_session(&expert, &booking_id);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_reject_already_reclaimed_session() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let expert = Address::generate(&env);
+    let oracle = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let token = create_token_contract(&env, &token_admin);
+    token.mint(&user, &10_000);
+
+    let client = create_client(&env);
+    client.init(&admin, &token.address, &oracle);
+
+    let rate_per_second = 10_i128;
+    let max_duration = 100_u64;
+    let booking_id = client.book_session(&user, &expert, &rate_per_second, &max_duration);
+
+    // Advance time and user reclaims
+    env.ledger().set_timestamp(env.ledger().timestamp() + 90_000);
+    client.reclaim_stale_session(&user, &booking_id);
+
+    // Expert tries to reject after reclamation (should fail - not pending)
+    let result = client.try_reject_session(&expert, &booking_id);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_wrong_expert_cannot_reject() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let expert = Address::generate(&env);
+    let wrong_expert = Address::generate(&env);
+    let oracle = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let token = create_token_contract(&env, &token_admin);
+    token.mint(&user, &10_000);
+
+    let client = create_client(&env);
+    client.init(&admin, &token.address, &oracle);
+
+    let rate_per_second = 10_i128;
+    let max_duration = 100_u64;
+    let booking_id = client.book_session(&user, &expert, &rate_per_second, &max_duration);
+
+    // Different expert tries to reject (should fail - not authorized)
+    let result = client.try_reject_session(&wrong_expert, &booking_id);
+    assert!(result.is_err());
+
+    // Verify funds still in contract
+    assert_eq!(token.balance(&client.address), 1_000);
+}
+
+#[test]
+fn test_reject_nonexistent_booking() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let expert = Address::generate(&env);
+    let token = Address::generate(&env);
+    let oracle = Address::generate(&env);
+
+    let client = create_client(&env);
+    client.init(&admin, &token, &oracle);
+
+    // Expert tries to reject non-existent booking (should fail - not found)
+    let result = client.try_reject_session(&expert, &999);
+    assert!(result.is_err());
+}
+

@@ -59,6 +59,16 @@ impl PaymentVaultContract {
         contract::reclaim_stale_session(&env, &user, booking_id)
     }
 
+    /// Reject a pending session (Expert-only)
+    /// Experts can reject a pending booking, instantly refunding the user
+    pub fn reject_session(
+        env: Env,
+        expert: Address,
+        booking_id: u64,
+    ) -> Result<(), VaultError> {
+        contract::reject_session(&env, &expert, booking_id)
+    }
+
     /// Get all booking IDs for a specific user
     pub fn get_user_bookings(env: Env, user: Address) -> Vec<u64> {
         storage::get_user_bookings(&env, &user)
