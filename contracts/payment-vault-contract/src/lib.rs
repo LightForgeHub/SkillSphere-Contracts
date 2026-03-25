@@ -39,6 +39,14 @@ impl PaymentVaultContract {
         contract::unpause(&env)
     }
 
+    pub fn set_fee(env: Env, new_fee_bps: u32) -> Result<(), VaultError> {
+        contract::set_fee(&env, new_fee_bps)
+    }
+
+    pub fn set_treasury(env: Env, treasury: Address) -> Result<(), VaultError> {
+        contract::set_treasury(&env, &treasury)
+    }
+
     /// Set an expert's own rate per second
     pub fn set_my_rate(env: Env, expert: Address, rate_per_second: i128) -> Result<(), VaultError> {
         contract::set_my_rate(&env, &expert, rate_per_second)
