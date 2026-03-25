@@ -68,4 +68,10 @@ impl IdentityRegistryContract {
     pub fn update_profile(env: Env, expert: Address, new_uri: String) -> Result<(), RegistryError> {
         contract::update_profile(&env, &expert, new_uri)
     }
+
+    /// Get a paginated list of experts
+    /// Returns a vector of expert addresses from start_index to start_index + limit
+    pub fn get_experts_paginated(env: Env, start_index: u64, limit: u64) -> Vec<Address> {
+        contract::get_experts_paginated(&env, start_index, limit)
+    }
 }
