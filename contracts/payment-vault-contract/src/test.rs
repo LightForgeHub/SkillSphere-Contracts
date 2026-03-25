@@ -697,6 +697,157 @@ fn test_reject_nonexistent_booking() {
     assert!(result.is_err());
 }
 
+// ==================== Platform Fee Tests ====================
+
+#[test]
+fn test_set_fee_and_treasury() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let oracle = Address::generate(&env);
+    let token = Address::generate(&env);
+    let treasury = Address::generate(&env);
+
+    let client = create_client(&env);
+    client.init(&admin, &token, &oracle);
+
+    let res = client.try_set_fee(&1000_u32);
+    assert!(res.is_ok());
+
+    let res = client.try_set_treasury(&treasury);
+    assert!(res.is_ok());
+}
+
+#[test]
+fn test_fee_cap_at_2000_bps() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let oracle = Address::generate(&env);
+    let token = Address::generate(&env);
+
+    let client = create_client(&env);
+    client.init(&admin, &token, &oracle);
+
+    let res = client.try_set_fee(&2000_u32);
+    assert!(res.is_ok());
+
+    let res = client.try_set_fee(&2001_u32);
+    assert!(res.is_err());
+}
+
+#[test]
+fn test_finalize_with_10_percent_fee() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let expert = Address::generate(&env);
+    let oracle = Address::generate(&env);
+    let treasury = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let token = create_token_contract(&env, &token_admin);
+    token.mint(&user, &10_000);
+
+    let client = create_client(&env);
+    client.init(&admin, &token.address, &oracle);
+
+    // 10% fee = 1000 BPS
+    client.set_fee(&1000_u32);
+    client.set_treasury(&treasury);
+
+    // rate = 10/s, max_duration = 100s => deposit = 1000
+    let booking_id = {
+        client.set_my_rate(&expert, &10_i128);
+        client.book_session(&user, &expert, &100_u64)
+    };
+
+    assert_eq!(token.balance(&user), 9_000);
+
+    // finalize at 100s => gross_expert_pay = 1000
+    // fee = 1000 * 1000 / 10000 = 100
+    // expert_net = 900, refund = 0
+    client.finalize_session(&booking_id, &100_u64);
+
+    assert_eq!(token.balance(&treasury), 100);
+    assert_eq!(token.balance(&expert), 900);
+    assert_eq!(token.balance(&user), 9_000);
+    assert_eq!(token.balance(&client.address), 0);
+}
+
+#[test]
+fn test_finalize_with_fee_and_partial_refund() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let expert = Address::generate(&env);
+    let oracle = Address::generate(&env);
+    let treasury = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let token = create_token_contract(&env, &token_admin);
+    token.mint(&user, &10_000);
+
+    let client = create_client(&env);
+    client.init(&admin, &token.address, &oracle);
+
+    // 10% fee
+    client.set_fee(&1000_u32);
+    client.set_treasury(&treasury);
+
+    // rate = 10/s, max_duration = 100s => deposit = 1000
+    let booking_id = {
+        client.set_my_rate(&expert, &10_i128);
+        client.book_session(&user, &expert, &100_u64)
+    };
+
+    // finalize at 50s => gross_expert_pay = 500
+    // fee = 500 * 1000 / 10000 = 50
+    // expert_net = 450, refund = 500
+    client.finalize_session(&booking_id, &50_u64);
+
+    assert_eq!(token.balance(&treasury), 50);
+    assert_eq!(token.balance(&expert), 450);
+    assert_eq!(token.balance(&user), 9_500);
+    assert_eq!(token.balance(&client.address), 0);
+}
+
+#[test]
+fn test_finalize_zero_fee_behaves_as_before() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let expert = Address::generate(&env);
+    let oracle = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let token = create_token_contract(&env, &token_admin);
+    token.mint(&user, &10_000);
+
+    let client = create_client(&env);
+    client.init(&admin, &token.address, &oracle);
+
+    let booking_id = {
+        client.set_my_rate(&expert, &10_i128);
+        client.book_session(&user, &expert, &100_u64)
+    };
+
+    // no fee set (defaults to 0)
+    client.finalize_session(&booking_id, &100_u64);
+
+    assert_eq!(token.balance(&expert), 1_000);
+    assert_eq!(token.balance(&user), 9_000);
+    assert_eq!(token.balance(&client.address), 0);
+}
+
 // ==================== Expert Rate Tests ====================
 
 #[test]
