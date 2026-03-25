@@ -194,3 +194,26 @@ pub fn batch_update_profiles(
 
     Ok(())
 }
+
+/// Get a paginated list of experts
+/// Returns a vector of expert addresses from start_index to start_index + limit
+pub fn get_experts_paginated(env: &Env, start_index: u64, limit: u64) -> Vec<Address> {
+    let total = storage::get_total_experts(env);
+    let mut experts = Vec::new(env);
+
+    // Calculate the actual end index (don't exceed total)
+    let end_index = if start_index + limit > total {
+        total
+    } else {
+        start_index + limit
+    };
+
+    // Fetch experts from start_index to end_index
+    for i in start_index..end_index {
+        let expert = storage::get_expert_by_index(env, i);
+        experts.push_back(expert);
+    }
+
+    experts
+}
+

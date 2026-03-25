@@ -39,6 +39,18 @@ impl PaymentVaultContract {
         contract::unpause(&env)
     }
 
+    /// Transfer admin rights to a new address (Admin-only)
+    /// Old admin instantly loses all privileges
+    pub fn transfer_admin(env: Env, new_admin: Address) -> Result<(), VaultError> {
+        contract::transfer_admin(&env, &new_admin)
+    }
+
+    /// Update the oracle address (Admin-only)
+    /// Old oracle instantly loses authorization to finalize sessions
+    pub fn set_oracle(env: Env, new_oracle: Address) -> Result<(), VaultError> {
+        contract::set_oracle(&env, &new_oracle)
+    }
+
     /// Set an expert's own rate per second
     pub fn set_my_rate(env: Env, expert: Address, rate_per_second: i128) -> Result<(), VaultError> {
         contract::set_my_rate(&env, &expert, rate_per_second)

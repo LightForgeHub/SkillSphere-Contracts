@@ -703,3 +703,46 @@ fn test_batch_update_profiles_uri_too_long() {
     let result = client.try_batch_update_profiles(&updates);
     assert_eq!(result, Err(Ok(RegistryError::UriTooLong)));
 }
+
+#[test]
+fn test_expert_pagination() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(IdentityRegistryContract, ());
+    let client = IdentityRegistryContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    client.init(&admin);
+
+    // Add 15 experts
+    let mut experts = vec![&env];
+    for _ in 0..15 {
+        let expert = Address::generate(&env);
+        let uri = String::from_str(&env, "ipfs://expert");
+        client.add_expert(&expert, &uri);
+        experts.push_back(expert);
+    }
+
+    // Verify total count
+    assert_eq!(client.get_total_experts(), 15u64);
+
+    // Fetch start: 0, limit: 10 (should return 10)
+    let page1 = client.get_experts_paginated(&0u64, &10u64);
+    assert_eq!(page1.len(), 10);
+
+    // Verify the first 10 experts match
+    for i in 0..10 {
+        assert_eq!(page1.get(i as u32).unwrap(), experts.get(i as u32).unwrap());
+    }
+
+    // Fetch start: 10, limit: 10 (should return 5)
+    let page2 = client.get_experts_paginated(&10u64, &10u64);
+    assert_eq!(page2.len(), 5);
+
+    // Verify the last 5 experts match
+    for i in 0..5 {
+        assert_eq!(page2.get(i as u32).unwrap(), experts.get((i + 10) as u32).unwrap());
+    }
+}
+

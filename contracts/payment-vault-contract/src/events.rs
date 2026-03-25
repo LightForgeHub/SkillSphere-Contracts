@@ -42,3 +42,17 @@ pub fn expert_rate_updated(env: &Env, expert: &Address, rate: i128) {
     let topics = (symbol_short!("rate_upd"), expert.clone());
     env.events().publish(topics, rate);
 }
+
+/// Emitted when admin is transferred to a new address
+pub fn admin_transferred(env: &Env, old_admin: &Address, new_admin: &Address) {
+    let topics = (symbol_short!("adm_xfer"),);
+    env.events()
+        .publish(topics, (old_admin.clone(), new_admin.clone()));
+}
+
+/// Emitted when the oracle address is updated
+pub fn oracle_updated(env: &Env, old_oracle: &Address, new_oracle: &Address) {
+    let topics = (symbol_short!("orc_upd"),);
+    env.events()
+        .publish(topics, (old_oracle.clone(), new_oracle.clone()));
+}

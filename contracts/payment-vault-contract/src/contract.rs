@@ -215,6 +215,23 @@ pub fn reclaim_stale_session(env: &Env, user: &Address, booking_id: u64) -> Resu
     Ok(())
 }
 
+pub fn transfer_admin(env: &Env, new_admin: &Address) -> Result<(), VaultError> {
+    let current_admin = storage::get_admin(env).ok_or(VaultError::NotInitialized)?;
+    current_admin.require_auth();
+    storage::set_admin(env, new_admin);
+    events::admin_transferred(env, &current_admin, new_admin);
+    Ok(())
+}
+
+pub fn set_oracle(env: &Env, new_oracle: &Address) -> Result<(), VaultError> {
+    let admin = storage::get_admin(env).ok_or(VaultError::NotInitialized)?;
+    admin.require_auth();
+    let old_oracle = storage::get_oracle(env);
+    storage::set_oracle(env, new_oracle);
+    events::oracle_updated(env, &old_oracle, new_oracle);
+    Ok(())
+}
+
 pub fn reject_session(env: &Env, expert: &Address, booking_id: u64) -> Result<(), VaultError> {
     if storage::is_paused(env) {
         return Err(VaultError::ContractPaused);

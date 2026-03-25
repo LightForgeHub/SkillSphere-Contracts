@@ -697,6 +697,139 @@ fn test_reject_nonexistent_booking() {
     assert!(result.is_err());
 }
 
+// ==================== Key Rotation Tests ====================
+
+#[test]
+fn test_transfer_admin_success() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin_a = Address::generate(&env);
+    let admin_b = Address::generate(&env);
+    let token = Address::generate(&env);
+    let oracle = Address::generate(&env);
+
+    let client = create_client(&env);
+    client.init(&admin_a, &token, &oracle);
+
+    // Admin A transfers to Admin B
+    let result = client.try_transfer_admin(&admin_b);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn test_new_admin_can_pause_after_transfer() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin_a = Address::generate(&env);
+    let admin_b = Address::generate(&env);
+    let token = Address::generate(&env);
+    let oracle = Address::generate(&env);
+
+    let client = create_client(&env);
+    client.init(&admin_a, &token, &oracle);
+    client.transfer_admin(&admin_b);
+
+    // New admin B can pause and unpause
+    assert!(client.try_pause().is_ok());
+    assert!(client.try_unpause().is_ok());
+}
+
+#[test]
+fn test_old_admin_loses_privileges_after_transfer() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin_a = Address::generate(&env);
+    let admin_b = Address::generate(&env);
+    let token = Address::generate(&env);
+    let oracle = Address::generate(&env);
+
+    let client = create_client(&env);
+    client.init(&admin_a, &token, &oracle);
+    client.transfer_admin(&admin_b);
+
+    // Remove all mocked auths — now only explicit auth will pass
+    env.set_auths(&[]);
+
+    // Without any valid auth for admin_b, pause should fail
+    // (admin_b is now the required auth, but no auth is mocked)
+    let result = client.try_pause();
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_set_oracle_success() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let token = Address::generate(&env);
+    let oracle_old = Address::generate(&env);
+    let oracle_new = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let token_contract = create_token_contract(&env, &token_admin);
+    let user = Address::generate(&env);
+    let expert = Address::generate(&env);
+    token_contract.mint(&user, &10_000);
+
+    let client = create_client(&env);
+    client.init(&admin, &token_contract.address, &oracle_old);
+
+    // Book a session
+    client.set_my_rate(&expert, &10_i128);
+    let booking_id = client.book_session(&user, &expert, &100);
+
+    // Rotate oracle to new address
+    let result = client.try_set_oracle(&oracle_new);
+    assert!(result.is_ok());
+
+    // New oracle can finalize
+    let result = client.try_finalize_session(&booking_id, &50);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn test_non_admin_cannot_transfer_admin() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let attacker = Address::generate(&env);
+    let token = Address::generate(&env);
+    let oracle = Address::generate(&env);
+
+    let client = create_client(&env);
+    client.init(&admin, &token, &oracle);
+
+    // Clear auths so attacker has no authorization
+    env.set_auths(&[]);
+
+    let result = client.try_transfer_admin(&attacker);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_non_admin_cannot_set_oracle() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let attacker = Address::generate(&env);
+    let token = Address::generate(&env);
+    let oracle = Address::generate(&env);
+
+    let client = create_client(&env);
+    client.init(&admin, &token, &oracle);
+
+    env.set_auths(&[]);
+
+    let result = client.try_set_oracle(&attacker);
+    assert!(result.is_err());
+}
+
 // ==================== Expert Rate Tests ====================
 
 #[test]
