@@ -581,3 +581,125 @@ fn test_expert_directory_via_batch_add() {
     assert_eq!(client.get_expert_by_index(&1u64), expert2);
     assert_eq!(client.get_expert_by_index(&2u64), expert3);
 }
+
+#[test]
+fn test_batch_update_profiles() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(IdentityRegistryContract, ());
+    let client = IdentityRegistryContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    client.init(&admin);
+
+    // Create 5 experts and verify them
+    let expert1 = Address::generate(&env);
+    let expert2 = Address::generate(&env);
+    let expert3 = Address::generate(&env);
+    let expert4 = Address::generate(&env);
+    let expert5 = Address::generate(&env);
+
+    let uri1 = String::from_str(&env, "ipfs://original1");
+    let uri2 = String::from_str(&env, "ipfs://original2");
+    let uri3 = String::from_str(&env, "ipfs://original3");
+    let uri4 = String::from_str(&env, "ipfs://original4");
+    let uri5 = String::from_str(&env, "ipfs://original5");
+
+    client.add_expert(&expert1, &uri1);
+    client.add_expert(&expert2, &uri2);
+    client.add_expert(&expert3, &uri3);
+    client.add_expert(&expert4, &uri4);
+    client.add_expert(&expert5, &uri5);
+
+    // Prepare batch updates with new URIs
+    let new_uri1 = String::from_str(&env, "ipfs://updated1");
+    let new_uri2 = String::from_str(&env, "ipfs://updated2");
+    let new_uri3 = String::from_str(&env, "ipfs://updated3");
+    let new_uri4 = String::from_str(&env, "ipfs://updated4");
+    let new_uri5 = String::from_str(&env, "ipfs://updated5");
+
+    let updates = vec![
+        &env,
+        (expert1.clone(), new_uri1.clone(), 1u32), // Verified
+        (expert2.clone(), new_uri2.clone(), 1u32), // Verified
+        (expert3.clone(), new_uri3.clone(), 1u32), // Verified
+        (expert4.clone(), new_uri4.clone(), 1u32), // Verified
+        (expert5.clone(), new_uri5.clone(), 1u32), // Verified
+    ];
+
+    // Execute batch update
+    client.batch_update_profiles(&updates);
+
+    // Verify all 5 profiles have the new URIs
+    env.as_contract(&contract_id, || {
+        let rec1 = storage::get_expert_record(&env, &expert1);
+        let rec2 = storage::get_expert_record(&env, &expert2);
+        let rec3 = storage::get_expert_record(&env, &expert3);
+        let rec4 = storage::get_expert_record(&env, &expert4);
+        let rec5 = storage::get_expert_record(&env, &expert5);
+
+        assert_eq!(rec1.data_uri, new_uri1);
+        assert_eq!(rec2.data_uri, new_uri2);
+        assert_eq!(rec3.data_uri, new_uri3);
+        assert_eq!(rec4.data_uri, new_uri4);
+        assert_eq!(rec5.data_uri, new_uri5);
+
+        // Verify all remain verified
+        assert_eq!(rec1.status, ExpertStatus::Verified);
+        assert_eq!(rec2.status, ExpertStatus::Verified);
+        assert_eq!(rec3.status, ExpertStatus::Verified);
+        assert_eq!(rec4.status, ExpertStatus::Verified);
+        assert_eq!(rec5.status, ExpertStatus::Verified);
+    });
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #7)")]
+fn test_batch_update_profiles_max_vec() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(IdentityRegistryContract, ());
+    let client = IdentityRegistryContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    client.init(&admin);
+
+    // Create updates exceeding the limit (>20)
+    let mut updates = vec![&env];
+    for _ in 0..21 {
+        let expert = Address::generate(&env);
+        let uri = String::from_str(&env, "ipfs://test");
+        updates.push_back((expert, uri, 1u32));
+    }
+
+    // This should fail with ExpertVecMax error
+    client.batch_update_profiles(&updates);
+}
+
+#[test]
+fn test_batch_update_profiles_uri_too_long() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(IdentityRegistryContract, ());
+    let client = IdentityRegistryContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    client.init(&admin);
+
+    let expert = Address::generate(&env);
+    let uri = String::from_str(&env, "ipfs://initial");
+    client.add_expert(&expert, &uri);
+
+    // Create update with URI that's too long (>64 chars)
+    let long_str = "a".repeat(65);
+    let long_uri = String::from_str(&env, long_str.as_str());
+
+    let updates = vec![&env, (expert.clone(), long_uri, 1u32)];
+
+    // This should fail with UriTooLong error
+    let result = client.try_batch_update_profiles(&updates);
+    assert_eq!(result, Err(Ok(RegistryError::UriTooLong)));
+}

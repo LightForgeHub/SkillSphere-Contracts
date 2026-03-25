@@ -157,3 +157,40 @@ pub fn update_profile(env: &Env, expert: &Address, new_uri: String) -> Result<()
     events::emit_profile_updated(env, expert.clone(), new_uri);
     Ok(())
 }
+
+/// Batch update expert profiles (Admin only)
+/// Allows admins to update multiple expert metadata URIs in a single transaction
+pub fn batch_update_profiles(
+    env: &Env,
+    updates: Vec<(Address, String, u32)>,
+) -> Result<(), RegistryError> {
+    // Limit batch size to prevent DoS
+    if updates.len() > 20 {
+        return Err(RegistryError::ExpertVecMax);
+    }
+
+    let admin = storage::get_admin(env).ok_or(RegistryError::NotInitialized)?;
+    admin.require_auth();
+
+    for update in updates {
+        let (expert, new_uri, status_u32) = update;
+
+        // Validate URI length
+        if new_uri.len() > 64 {
+            return Err(RegistryError::UriTooLong);
+        }
+
+        // Convert u32 to ExpertStatus
+        let status = match status_u32 {
+            0 => ExpertStatus::Unverified,
+            1 => ExpertStatus::Verified,
+            2 => ExpertStatus::Banned,
+            _ => return Err(RegistryError::NotVerified), // Invalid status value
+        };
+
+        // Update the expert record
+        storage::set_expert_record(env, &expert, status, new_uri);
+    }
+
+    Ok(())
+}
