@@ -43,6 +43,11 @@ impl IdentityRegistryContract {
         contract::ban_expert(&env, &expert)
     }
 
+    /// Unban an expert and restore their verification status (Admin only)
+    pub fn unban_expert(env: Env, expert: Address) -> Result<(), RegistryError> {
+        contract::unban_expert(&env, &expert)
+    }
+
     /// Get the total number of verified experts ever added to the directory
     pub fn get_total_experts(env: Env) -> u64 {
         contract::get_total_experts(&env)
