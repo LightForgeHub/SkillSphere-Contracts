@@ -7,7 +7,7 @@ pub enum DataKey {
     Admin,
     Token,
     Oracle,
-    RegistryAddress,        // Identity Registry contract address
+    RegistryAddress,        
     Booking(u64),            // Booking ID -> BookingRecord
     BookingCounter,          // Counter for generating unique booking IDs
     UserBookings(Address),   // User Address -> Vec<u64> of booking IDs
