@@ -696,9 +696,10 @@ fn test_transfer_admin_success() {
     let admin_b = Address::generate(&env);
     let token = Address::generate(&env);
     let oracle = Address::generate(&env);
+    let registry = Address::generate(&env);
 
     let client = create_client(&env);
-    client.init(&admin_a, &token, &oracle);
+    client.init(&admin_a, &token, &oracle, &registry);
 
     // Admin A transfers to Admin B
     let result = client.try_transfer_admin(&admin_b);
@@ -714,9 +715,10 @@ fn test_new_admin_can_pause_after_transfer() {
     let admin_b = Address::generate(&env);
     let token = Address::generate(&env);
     let oracle = Address::generate(&env);
+    let registry = Address::generate(&env);
 
     let client = create_client(&env);
-    client.init(&admin_a, &token, &oracle);
+    client.init(&admin_a, &token, &oracle, &registry);
     client.transfer_admin(&admin_b);
 
     // New admin B can pause and unpause
@@ -733,9 +735,10 @@ fn test_old_admin_loses_privileges_after_transfer() {
     let admin_b = Address::generate(&env);
     let token = Address::generate(&env);
     let oracle = Address::generate(&env);
+    let registry = Address::generate(&env);
 
     let client = create_client(&env);
-    client.init(&admin_a, &token, &oracle);
+    client.init(&admin_a, &token, &oracle, &registry);
     client.transfer_admin(&admin_b);
 
     // Remove all mocked auths — now only explicit auth will pass
@@ -756,6 +759,7 @@ fn test_set_oracle_success() {
     let token = Address::generate(&env);
     let oracle_old = Address::generate(&env);
     let oracle_new = Address::generate(&env);
+    let registry = create_mock_registry(&env);
 
     let token_admin = Address::generate(&env);
     let token_contract = create_token_contract(&env, &token_admin);
@@ -764,7 +768,7 @@ fn test_set_oracle_success() {
     token_contract.mint(&user, &10_000);
 
     let client = create_client(&env);
-    client.init(&admin, &token_contract.address, &oracle_old);
+    client.init(&admin, &token_contract.address, &oracle_old, &registry);
 
     // Book a session
     client.set_my_rate(&expert, &10_i128);
@@ -788,9 +792,10 @@ fn test_non_admin_cannot_transfer_admin() {
     let attacker = Address::generate(&env);
     let token = Address::generate(&env);
     let oracle = Address::generate(&env);
+    let registry = Address::generate(&env);
 
     let client = create_client(&env);
-    client.init(&admin, &token, &oracle);
+    client.init(&admin, &token, &oracle, &registry);
 
     // Clear auths so attacker has no authorization
     env.set_auths(&[]);
@@ -808,9 +813,10 @@ fn test_non_admin_cannot_set_oracle() {
     let attacker = Address::generate(&env);
     let token = Address::generate(&env);
     let oracle = Address::generate(&env);
+    let registry = Address::generate(&env);
 
     let client = create_client(&env);
-    client.init(&admin, &token, &oracle);
+    client.init(&admin, &token, &oracle, &registry);
 
     env.set_auths(&[]);
 
@@ -1137,6 +1143,7 @@ fn test_scale_50_bookings_single_user_with_pagination() {
     let user = Address::generate(&env);
     let expert = Address::generate(&env);
     let oracle = Address::generate(&env);
+    let registry = create_mock_registry(&env);
 
     let token_admin = Address::generate(&env);
     let token = create_token_contract(&env, &token_admin);
@@ -1145,7 +1152,7 @@ fn test_scale_50_bookings_single_user_with_pagination() {
     token.mint(&user, &50_000);
 
     let client = create_client(&env);
-    client.init(&admin, &token.address, &oracle);
+    client.init(&admin, &token.address, &oracle, &registry);
 
     // Expert sets rate
     let rate_per_second = 1_i128;
@@ -1202,6 +1209,7 @@ fn test_pagination_isolation_between_users() {
     let user_b = Address::generate(&env);
     let expert = Address::generate(&env);
     let oracle = Address::generate(&env);
+    let registry = create_mock_registry(&env);
 
     let token_admin = Address::generate(&env);
     let token = create_token_contract(&env, &token_admin);
@@ -1209,7 +1217,7 @@ fn test_pagination_isolation_between_users() {
     token.mint(&user_b, &25_000);
 
     let client = create_client(&env);
-    client.init(&admin, &token.address, &oracle);
+    client.init(&admin, &token.address, &oracle, &registry);
 
     client.set_my_rate(&expert, &1_i128);
 
@@ -1250,12 +1258,13 @@ fn test_expert_pagination_50_bookings() {
     let admin = Address::generate(&env);
     let expert = Address::generate(&env);
     let oracle = Address::generate(&env);
+    let registry = create_mock_registry(&env);
 
     let token_admin = Address::generate(&env);
     let token = create_token_contract(&env, &token_admin);
 
     let client = create_client(&env);
-    client.init(&admin, &token.address, &oracle);
+    client.init(&admin, &token.address, &oracle, &registry);
     client.set_my_rate(&expert, &1_i128);
 
     // 50 different users each book 1 session with the same expert

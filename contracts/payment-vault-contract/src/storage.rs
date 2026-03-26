@@ -13,9 +13,6 @@ pub enum DataKey {
     UserBookings(Address),   // User Address -> Vec<u64> of booking IDs
     ExpertBookings(Address), // Expert Address -> Vec<u64> of booking IDs
     IsPaused,                // Circuit breaker flag
-    ExpertRate(Address),     // Expert Address -> rate per second (i128)
-    Booking(u64),   // Booking ID -> BookingRecord
-    BookingCounter, // Counter for generating unique booking IDs
     // ── Indexed User Booking List ──────────────────────────────────────────
     // Replaces the old Vec<u64> approach with O(1) per-write composite keys.
     UserBooking(Address, u32), // (user, index) -> booking_id
@@ -23,8 +20,7 @@ pub enum DataKey {
     // ── Indexed Expert Booking List ────────────────────────────────────────
     ExpertBooking(Address, u32), // (expert, index) -> booking_id
     ExpertBookingCount(Address), // expert -> total count (u32)
-    IsPaused,                    // Circuit breaker flag
-    ExpertRate(Address),         // Expert Address -> rate per second (i128)
+    ExpertRate(Address),     // Expert Address -> rate per second (i128)
 }
 
 // --- Admin ---
