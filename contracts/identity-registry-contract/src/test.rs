@@ -746,3 +746,44 @@ fn test_expert_pagination() {
     }
 }
 
+#[test]
+fn test_unban_expert() {
+    let env = Env::default();
+    let contract_id = env.register(IdentityRegistryContract, ());
+    let client = IdentityRegistryContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let expert = Address::generate(&env);
+
+    client.init(&admin);
+
+    env.mock_all_auths();
+    let data_uri = String::from_str(&env, "ipfs://unban");
+    client.add_expert(&expert, &data_uri);
+
+    // Initial status: Verified
+    assert_eq!(client.get_status(&expert), ExpertStatus::Verified);
+    let initial_total = client.get_total_experts();
+
+    // Ban the expert
+    client.ban_expert(&expert);
+    assert_eq!(client.get_status(&expert), ExpertStatus::Banned);
+
+    // Unban the expert
+    client.unban_expert(&expert);
+    assert_eq!(client.get_status(&expert), ExpertStatus::Verified);
+
+    // Data URI should be preserved
+    env.as_contract(&contract_id, || {
+        let rec = storage::get_expert_record(&env, &expert);
+        assert_eq!(rec.data_uri, data_uri);
+    });
+
+    // Total experts should NOT have increased
+    assert_eq!(client.get_total_experts(), initial_total);
+
+    // Test: Try to unban a non-banned expert (should fail with NotBanned)
+    let result = client.try_unban_expert(&expert);
+    assert_eq!(result, Err(Ok(RegistryError::NotBanned)));
+}
+
