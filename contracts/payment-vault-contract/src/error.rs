@@ -14,4 +14,6 @@ pub enum VaultError {
     ContractPaused = 8,
     ExpertRateNotSet = 9,
     ExpertNotVerified = 10,
+    SessionAlreadyStarted = 11,
+    Overflow = 12,
 }

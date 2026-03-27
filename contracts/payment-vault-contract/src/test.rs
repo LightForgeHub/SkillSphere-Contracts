@@ -1249,6 +1249,127 @@ fn test_pagination_isolation_between_users() {
     }
 }
 
+// ==================== Booking Cancellation Tests (Issue #36) ====================
+
+#[test]
+fn test_user_cancels_before_session_starts_success() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let expert = Address::generate(&env);
+    let oracle = Address::generate(&env);
+    let registry = create_mock_registry(&env);
+
+    let token_admin = Address::generate(&env);
+    let token = create_token_contract(&env, &token_admin);
+    token.mint(&user, &10_000);
+
+    let client = create_client(&env);
+    client.init(&admin, &token.address, &oracle, &registry);
+
+    let booking_id = {
+        client.set_my_rate(&expert, &10_i128);
+        client.book_session(&user, &expert, &100)
+    };
+
+    assert_eq!(token.balance(&user), 9_000);
+    assert_eq!(token.balance(&client.address), 1_000);
+
+    // User cancels immediately — session not yet started
+    let result = client.try_cancel_booking(&user, &booking_id);
+    assert!(result.is_ok());
+
+    // Full refund returned to user
+    assert_eq!(token.balance(&user), 10_000);
+    assert_eq!(token.balance(&client.address), 0);
+
+    let booking = client.get_booking(&booking_id).unwrap();
+    use crate::types::BookingStatus;
+    assert_eq!(booking.status, BookingStatus::Cancelled);
+}
+
+#[test]
+fn test_user_cannot_cancel_after_oracle_marks_started() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let expert = Address::generate(&env);
+    let oracle = Address::generate(&env);
+    let registry = create_mock_registry(&env);
+
+    let token_admin = Address::generate(&env);
+    let token = create_token_contract(&env, &token_admin);
+    token.mint(&user, &10_000);
+
+    let client = create_client(&env);
+    client.init(&admin, &token.address, &oracle, &registry);
+
+    let booking_id = {
+        client.set_my_rate(&expert, &10_i128);
+        client.book_session(&user, &expert, &100)
+    };
+
+    // Oracle marks session as started
+    let result = client.try_mark_session_started(&booking_id);
+    assert!(result.is_ok());
+
+    // User tries to cancel — should fail because session has started
+    let result = client.try_cancel_booking(&user, &booking_id);
+    assert!(result.is_err());
+
+    // Funds remain locked in contract
+    assert_eq!(token.balance(&client.address), 1_000);
+    assert_eq!(token.balance(&user), 9_000);
+}
+
+// ==================== Dynamic Precision Tests (Issue #38) ====================
+
+#[test]
+fn test_booking_with_18_decimal_token_scale_no_overflow() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let expert = Address::generate(&env);
+    let oracle = Address::generate(&env);
+    let registry = create_mock_registry(&env);
+
+    let token_admin = Address::generate(&env);
+    let token = create_token_contract(&env, &token_admin);
+
+    // Simulate a token with 18 decimals:
+    // 1 token/second = 1_000_000_000_000_000_000 atomic units/second
+    let rate_per_second: i128 = 1_000_000_000_000_000_000_i128; // 10^18
+    let max_duration: u64 = 100; // 100 seconds
+    let expected_deposit: i128 = rate_per_second * max_duration as i128; // 10^20 — well within i128
+
+    // Mint enough tokens to cover deposit
+    token.mint(&user, &expected_deposit);
+
+    let client = create_client(&env);
+    client.init(&admin, &token.address, &oracle, &registry);
+
+    client.set_my_rate(&expert, &rate_per_second);
+    let booking_id = client.book_session(&user, &expert, &max_duration);
+
+    assert_eq!(token.balance(&user), 0);
+    assert_eq!(token.balance(&client.address), expected_deposit);
+
+    // Finalize for 50 seconds
+    client.finalize_session(&booking_id, &50);
+
+    let expert_pay = rate_per_second * 50_i128;
+    let refund = expected_deposit - expert_pay;
+    assert_eq!(token.balance(&expert), expert_pay);
+    assert_eq!(token.balance(&user), refund);
+    assert_eq!(token.balance(&client.address), 0);
+}
+
 /// Verifies expert pagination works correctly for 50 sessions.
 #[test]
 fn test_expert_pagination_50_bookings() {

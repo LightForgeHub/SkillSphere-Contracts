@@ -110,6 +110,13 @@ pub fn update_booking_status(env: &Env, booking_id: u64, status: BookingStatus) 
     }
 }
 
+pub fn update_booking_started_at(env: &Env, booking_id: u64, started_at: u64) {
+    if let Some(mut booking) = get_booking(env, booking_id) {
+        booking.started_at = Some(started_at);
+        save_booking(env, &booking);
+    }
+}
+
 // --- User Booking List (O(1) indexed storage) ---
 
 /// Returns how many bookings a user has booked in total.

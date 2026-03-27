@@ -88,8 +88,12 @@ pub fn book_session(
         return Err(VaultError::InvalidAmount);
     }
 
-    // Calculate total deposit
-    let total_deposit = rate_per_second * (max_duration as i128);
+    // Calculate total deposit.
+    // rate_per_second must be expressed in atomic units of the payment token
+    // (e.g., stroops for XLM with 7 decimals, or 10^18 base units for 18-decimal tokens).
+    let total_deposit = rate_per_second
+        .checked_mul(max_duration as i128)
+        .ok_or(VaultError::Overflow)?;
 
     if total_deposit <= 0 {
         return Err(VaultError::InvalidAmount);
@@ -114,6 +118,7 @@ pub fn book_session(
         total_deposit,
         status: BookingStatus::Pending,
         created_at: env.ledger().timestamp(),
+        started_at: None,
     };
 
     // Save booking
@@ -150,8 +155,13 @@ pub fn finalize_session(
         return Err(VaultError::BookingNotPending);
     }
 
-    // 4. Calculate payments
-    let expert_pay = booking.rate_per_second * (actual_duration as i128);
+    // 4. Calculate payments.
+    // rate_per_second is stored in atomic units of the payment token, so this
+    // multiplication is safe for any token precision as long as the product fits i128.
+    let expert_pay = booking
+        .rate_per_second
+        .checked_mul(actual_duration as i128)
+        .ok_or(VaultError::Overflow)?;
     let refund = booking.total_deposit - expert_pay;
 
     // Ensure calculations are valid
@@ -225,6 +235,63 @@ pub fn reclaim_stale_session(env: &Env, user: &Address, booking_id: u64) -> Resu
 
     // 8. Emit event
     events::session_reclaimed(env, booking_id, booking.total_deposit);
+
+    Ok(())
+}
+
+/// Mark a session as started (Oracle-only).
+/// Once started, the user can no longer cancel the booking.
+pub fn mark_session_started(env: &Env, booking_id: u64) -> Result<(), VaultError> {
+    if storage::is_paused(env) {
+        return Err(VaultError::ContractPaused);
+    }
+
+    let oracle = storage::get_oracle(env);
+    oracle.require_auth();
+
+    let booking = storage::get_booking(env, booking_id).ok_or(VaultError::BookingNotFound)?;
+
+    if booking.status != BookingStatus::Pending {
+        return Err(VaultError::BookingNotPending);
+    }
+
+    let started_at = env.ledger().timestamp();
+    storage::update_booking_started_at(env, booking_id, started_at);
+    events::session_started(env, booking_id, started_at);
+
+    Ok(())
+}
+
+/// Cancel a pending booking and receive a full refund (User-only).
+/// Can only be cancelled if the Oracle has not yet marked it as started.
+pub fn cancel_booking(env: &Env, user: &Address, booking_id: u64) -> Result<(), VaultError> {
+    if storage::is_paused(env) {
+        return Err(VaultError::ContractPaused);
+    }
+
+    user.require_auth();
+
+    let booking = storage::get_booking(env, booking_id).ok_or(VaultError::BookingNotFound)?;
+
+    if booking.user != *user {
+        return Err(VaultError::NotAuthorized);
+    }
+
+    if booking.status != BookingStatus::Pending {
+        return Err(VaultError::BookingNotPending);
+    }
+
+    if booking.started_at.is_some() {
+        return Err(VaultError::SessionAlreadyStarted);
+    }
+
+    let token_address = storage::get_token(env);
+    let token_client = token::Client::new(env, &token_address);
+    let contract_address = env.current_contract_address();
+    token_client.transfer(&contract_address, &booking.user, &booking.total_deposit);
+
+    storage::update_booking_status(env, booking_id, BookingStatus::Cancelled);
+    events::booking_cancelled(env, booking_id, booking.total_deposit);
 
     Ok(())
 }

@@ -51,13 +51,17 @@ impl PaymentVaultContract {
         contract::set_oracle(&env, &new_oracle)
     }
 
-    /// Set an expert's own rate per second
+    /// Set an expert's own rate per second.
+    /// `rate_per_second` MUST be expressed in atomic units of the payment token
+    /// (e.g., 1 XLM = 10_000_000 stroops; 1 18-decimal token = 10^18 base units).
     pub fn set_my_rate(env: Env, expert: Address, rate_per_second: i128) -> Result<(), VaultError> {
         contract::set_my_rate(&env, &expert, rate_per_second)
     }
 
     /// Book a session with an expert.
     /// User deposits tokens upfront based on rate_per_second * max_duration.
+    /// Both `rate_per_second` and the resulting `total_deposit` are denominated in
+    /// atomic units of the configured payment token to correctly handle any token precision.
     pub fn book_session(
         env: Env,
         user: Address,
@@ -91,6 +95,20 @@ impl PaymentVaultContract {
     /// Experts can reject a pending booking, instantly refunding the user.
     pub fn reject_session(env: Env, expert: Address, booking_id: u64) -> Result<(), VaultError> {
         contract::reject_session(&env, &expert, booking_id)
+    }
+
+    /// Mark a session as started (Oracle-only).
+    /// Once called, the user can no longer cancel the booking.
+    pub fn mark_session_started(env: Env, booking_id: u64) -> Result<(), VaultError> {
+        contract::mark_session_started(&env, booking_id)
+    }
+
+    /// Cancel a pending booking and receive a full refund (User-only).
+    /// Cancellation is only allowed if the Oracle has not yet marked the session as started.
+    /// `rate_per_second` and `total_deposit` must always be expressed in atomic units
+    /// of the payment token (e.g., stroops for XLM, or 10^18 base units for 18-decimal tokens).
+    pub fn cancel_booking(env: Env, user: Address, booking_id: u64) -> Result<(), VaultError> {
+        contract::cancel_booking(&env, &user, booking_id)
     }
 
     /// Get a paginated list of booking IDs for a specific user.
