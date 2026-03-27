@@ -2,13 +2,14 @@ use crate::error::VaultError;
 use crate::events;
 use crate::storage;
 use crate::types::{BookingRecord, BookingStatus};
-use soroban_sdk::{token, Address, Env};
+use soroban_sdk::{token, Address, Env, Symbol};
 
 pub fn initialize_vault(
     env: &Env,
     admin: &Address,
     token: &Address,
     oracle: &Address,
+    registry: &Address,
 ) -> Result<(), VaultError> {
     // 1. Check if already initialized
     if storage::has_admin(env) {
@@ -19,6 +20,7 @@ pub fn initialize_vault(
     storage::set_admin(env, admin);
     storage::set_token(env, token);
     storage::set_oracle(env, oracle);
+    storage::set_registry_address(env, registry);
 
     Ok(())
 }
@@ -82,6 +84,18 @@ pub fn book_session(
     // Require authorization from the user creating the booking
     user.require_auth();
 
+    // Verify expert is verified via Identity Registry cross-contract call
+    let registry_address = storage::get_registry_address(env).ok_or(VaultError::NotInitialized)?;
+    let is_verified: bool = env.invoke_contract(
+        &registry_address,
+        &Symbol::new(env, "is_verified"),
+        soroban_sdk::vec![env, expert.to_val()],
+    );
+
+    if !is_verified {
+        return Err(VaultError::ExpertNotVerified);
+    }
+
     // Fetch the expert's rate
     let rate_per_second =
         storage::get_expert_rate(env, expert).ok_or(VaultError::ExpertRateNotSet)?;
@@ -91,8 +105,12 @@ pub fn book_session(
         return Err(VaultError::InvalidAmount);
     }
 
-    // Calculate total deposit
-    let total_deposit = rate_per_second * (max_duration as i128);
+    // Calculate total deposit.
+    // rate_per_second must be expressed in atomic units of the payment token
+    // (e.g., stroops for XLM with 7 decimals, or 10^18 base units for 18-decimal tokens).
+    let total_deposit = rate_per_second
+        .checked_mul(max_duration as i128)
+        .ok_or(VaultError::Overflow)?;
 
     if total_deposit <= 0 {
         return Err(VaultError::InvalidAmount);
@@ -117,6 +135,7 @@ pub fn book_session(
         total_deposit,
         status: BookingStatus::Pending,
         created_at: env.ledger().timestamp(),
+        started_at: None,
     };
 
     // Save booking
@@ -236,6 +255,80 @@ pub fn reclaim_stale_session(env: &Env, user: &Address, booking_id: u64) -> Resu
     // 8. Emit event
     events::session_reclaimed(env, booking_id, booking.total_deposit);
 
+    Ok(())
+}
+
+/// Mark a session as started (Oracle-only).
+/// Once started, the user can no longer cancel the booking.
+pub fn mark_session_started(env: &Env, booking_id: u64) -> Result<(), VaultError> {
+    if storage::is_paused(env) {
+        return Err(VaultError::ContractPaused);
+    }
+
+    let oracle = storage::get_oracle(env);
+    oracle.require_auth();
+
+    let booking = storage::get_booking(env, booking_id).ok_or(VaultError::BookingNotFound)?;
+
+    if booking.status != BookingStatus::Pending {
+        return Err(VaultError::BookingNotPending);
+    }
+
+    let started_at = env.ledger().timestamp();
+    storage::update_booking_started_at(env, booking_id, started_at);
+    events::session_started(env, booking_id, started_at);
+
+    Ok(())
+}
+
+/// Cancel a pending booking and receive a full refund (User-only).
+/// Can only be cancelled if the Oracle has not yet marked it as started.
+pub fn cancel_booking(env: &Env, user: &Address, booking_id: u64) -> Result<(), VaultError> {
+    if storage::is_paused(env) {
+        return Err(VaultError::ContractPaused);
+    }
+
+    user.require_auth();
+
+    let booking = storage::get_booking(env, booking_id).ok_or(VaultError::BookingNotFound)?;
+
+    if booking.user != *user {
+        return Err(VaultError::NotAuthorized);
+    }
+
+    if booking.status != BookingStatus::Pending {
+        return Err(VaultError::BookingNotPending);
+    }
+
+    if booking.started_at.is_some() {
+        return Err(VaultError::SessionAlreadyStarted);
+    }
+
+    let token_address = storage::get_token(env);
+    let token_client = token::Client::new(env, &token_address);
+    let contract_address = env.current_contract_address();
+    token_client.transfer(&contract_address, &booking.user, &booking.total_deposit);
+
+    storage::update_booking_status(env, booking_id, BookingStatus::Cancelled);
+    events::booking_cancelled(env, booking_id, booking.total_deposit);
+
+    Ok(())
+}
+
+pub fn transfer_admin(env: &Env, new_admin: &Address) -> Result<(), VaultError> {
+    let current_admin = storage::get_admin(env).ok_or(VaultError::NotInitialized)?;
+    current_admin.require_auth();
+    storage::set_admin(env, new_admin);
+    events::admin_transferred(env, &current_admin, new_admin);
+    Ok(())
+}
+
+pub fn set_oracle(env: &Env, new_oracle: &Address) -> Result<(), VaultError> {
+    let admin = storage::get_admin(env).ok_or(VaultError::NotInitialized)?;
+    admin.require_auth();
+    let old_oracle = storage::get_oracle(env);
+    storage::set_oracle(env, new_oracle);
+    events::oracle_updated(env, &old_oracle, new_oracle);
     Ok(())
 }
 

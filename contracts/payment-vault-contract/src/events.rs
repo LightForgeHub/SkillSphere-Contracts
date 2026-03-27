@@ -37,8 +37,34 @@ pub fn session_rejected(env: &Env, booking_id: u64, reason: &str) {
     env.events().publish(topics, reason);
 }
 
+/// Emitted when a user cancels a pending booking and receives a full refund
+pub fn booking_cancelled(env: &Env, booking_id: u64, amount: i128) {
+    let topics = (symbol_short!("cancel"), booking_id);
+    env.events().publish(topics, amount);
+}
+
+/// Emitted when the Oracle marks a session as active/started
+pub fn session_started(env: &Env, booking_id: u64, started_at: u64) {
+    let topics = (symbol_short!("started"), booking_id);
+    env.events().publish(topics, started_at);
+}
+
 /// Emitted when an expert updates their rate
 pub fn expert_rate_updated(env: &Env, expert: &Address, rate: i128) {
     let topics = (symbol_short!("rate_upd"), expert.clone());
     env.events().publish(topics, rate);
+}
+
+/// Emitted when admin is transferred to a new address
+pub fn admin_transferred(env: &Env, old_admin: &Address, new_admin: &Address) {
+    let topics = (symbol_short!("adm_xfer"),);
+    env.events()
+        .publish(topics, (old_admin.clone(), new_admin.clone()));
+}
+
+/// Emitted when the oracle address is updated
+pub fn oracle_updated(env: &Env, old_oracle: &Address, new_oracle: &Address) {
+    let topics = (symbol_short!("orc_upd"),);
+    env.events()
+        .publish(topics, (old_oracle.clone(), new_oracle.clone()));
 }
