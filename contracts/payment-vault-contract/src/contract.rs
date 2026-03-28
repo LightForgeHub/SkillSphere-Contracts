@@ -134,6 +134,69 @@ pub fn book_session(
     Ok(booking_id)
 }
 
+pub fn top_up_session(
+    env: &Env,
+    user: &Address,
+    booking_id: u64,
+    additional_duration: u64,
+) -> Result<(), VaultError> {
+    if storage::is_paused(env) {
+        return Err(VaultError::ContractPaused);
+    }
+
+    // Require authorization from the user
+    user.require_auth();
+
+    // Get booking and verify it exists
+    let mut booking = storage::get_booking(env, booking_id).ok_or(VaultError::BookingNotFound)?;
+
+    // Verify the caller is the booking owner
+    if booking.user != *user {
+        return Err(VaultError::NotAuthorized);
+    }
+
+    // Verify booking is in Pending status
+    if booking.status != BookingStatus::Pending {
+        return Err(VaultError::BookingNotPending);
+    }
+
+    // Calculate extra cost
+    let extra_cost = booking
+        .rate_per_second
+        .checked_mul(additional_duration as i128)
+        .ok_or(VaultError::Overflow)?;
+
+    if extra_cost <= 0 {
+        return Err(VaultError::InvalidAmount);
+    }
+
+    // Get the token contract
+    let token_address = storage::get_token(env);
+    let token_client = token::Client::new(env, &token_address);
+
+    // Transfer extra tokens from user to this contract
+    let contract_address = env.current_contract_address();
+    token_client.transfer(user, &contract_address, &extra_cost);
+
+    // Update booking
+    booking.total_deposit = booking
+        .total_deposit
+        .checked_add(extra_cost)
+        .ok_or(VaultError::Overflow)?;
+    booking.max_duration = booking
+        .max_duration
+        .checked_add(additional_duration)
+        .ok_or(VaultError::Overflow)?;
+
+    // Save booking
+    storage::save_booking(env, &booking);
+
+    // Emit event
+    events::session_topped_up(env, booking_id, additional_duration, extra_cost);
+
+    Ok(())
+}
+
 pub fn finalize_session(
     env: &Env,
     booking_id: u64,

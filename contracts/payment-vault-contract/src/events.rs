@@ -68,3 +68,9 @@ pub fn oracle_updated(env: &Env, old_oracle: &Address, new_oracle: &Address) {
     env.events()
         .publish(topics, (old_oracle.clone(), new_oracle.clone()));
 }
+
+/// Emitted when a user tops up a pending session
+pub fn session_topped_up(env: &Env, booking_id: u64, additional_duration: u64, extra_cost: i128) {
+    let topics = (symbol_short!("top_up"), booking_id);
+    env.events().publish(topics, (additional_duration, extra_cost));
+}

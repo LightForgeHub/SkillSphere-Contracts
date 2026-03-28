@@ -71,6 +71,17 @@ impl PaymentVaultContract {
         contract::book_session(&env, &user, &expert, max_duration)
     }
 
+    /// Add more time to a live (or pending) session without disconnecting.
+    /// Deducts corresponding tokens from the user based on the expert's rate.
+    pub fn top_up_session(
+        env: Env,
+        user: Address,
+        booking_id: u64,
+        additional_duration: u64,
+    ) -> Result<(), VaultError> {
+        contract::top_up_session(&env, &user, booking_id, additional_duration)
+    }
+
     /// Finalize a session (Oracle-only).
     /// Calculates payments based on actual duration and processes refunds.
     pub fn finalize_session(

@@ -1403,3 +1403,80 @@ fn test_expert_pagination_50_bookings() {
     let tail = client.get_expert_bookings(&expert, &40, &20);
     assert_eq!(tail.len(), 10); // only 10 left from index 40 to 49
 }
+
+#[test]
+fn test_top_up_session_success() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let expert = Address::generate(&env);
+    let oracle = Address::generate(&env);
+    let registry = create_mock_registry(&env);
+
+    let token_admin = Address::generate(&env);
+    let token = create_token_contract(&env, &token_admin);
+    token.mint(&user, &100_000);
+
+    let client = create_client(&env);
+    client.init(&admin, &token.address, &oracle, &registry);
+
+    let rate_per_second = 10_i128;
+    let initial_duration = 1800_u64; // 30 mins
+    let additional_duration = 900_u64; // 15 mins
+
+    let booking_id = {
+        client.set_my_rate(&expert, &rate_per_second);
+        client.book_session(&user, &expert, &initial_duration)
+    };
+
+    let initial_deposit = rate_per_second * (initial_duration as i128); // 18,000
+    assert_eq!(token.balance(&client.address), initial_deposit);
+
+    // Top up 15 mins
+    let extra_cost = rate_per_second * (additional_duration as i128); // 9,000
+    let result = client.try_top_up_session(&user, &booking_id, &additional_duration);
+    assert!(result.is_ok());
+
+    // Verify balances
+    let expected_total_deposit = initial_deposit + extra_cost;
+    assert_eq!(token.balance(&client.address), expected_total_deposit);
+
+    // Verify booking record
+    let booking = client.get_booking(&booking_id).unwrap();
+    assert_eq!(booking.max_duration, initial_duration + additional_duration);
+    assert_eq!(booking.total_deposit, expected_total_deposit);
+}
+
+#[test]
+fn test_top_up_wrong_user_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let other_user = Address::generate(&env);
+    let expert = Address::generate(&env);
+    let oracle = Address::generate(&env);
+    let registry = create_mock_registry(&env);
+
+    let token_admin = Address::generate(&env);
+    let token = create_token_contract(&env, &token_admin);
+    token.mint(&user, &40_000);
+    token.mint(&other_user, &40_000);
+
+    let client = create_client(&env);
+    client.init(&admin, &token.address, &oracle, &registry);
+
+    let rate_per_second = 10_i128;
+    let initial_duration = 1800_u64;
+
+    let booking_id = {
+        client.set_my_rate(&expert, &rate_per_second);
+        client.book_session(&user, &expert, &initial_duration)
+    };
+
+    let result = client.try_top_up_session(&other_user, &booking_id, &900);
+    assert!(result.is_err());
+}
