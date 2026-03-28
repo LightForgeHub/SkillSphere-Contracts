@@ -61,10 +61,37 @@ pub fn batch_ban_experts(env: Env, experts: Vec<Address>) -> Result<(), Registry
     Ok(())
 }
 
-pub fn verify_expert(env: &Env, expert: &Address, data_uri: String) -> Result<(), RegistryError> {
+/// Add a moderator (Admin only)
+pub fn add_moderator(env: &Env, moderator: &Address) -> Result<(), RegistryError> {
+    let admin = storage::get_admin(env).ok_or(RegistryError::NotInitialized)?;
+    admin.require_auth();
+    storage::set_moderator(env, moderator);
+    Ok(())
+}
+
+/// Remove a moderator (Admin only)
+pub fn remove_moderator(env: &Env, moderator: &Address) -> Result<(), RegistryError> {
+    let admin = storage::get_admin(env).ok_or(RegistryError::NotInitialized)?;
+    admin.require_auth();
+    storage::remove_moderator(env, moderator);
+    Ok(())
+}
+
+pub fn verify_expert(
+    env: &Env,
+    caller: &Address,
+    expert: &Address,
+    data_uri: String,
+) -> Result<(), RegistryError> {
     let admin = storage::get_admin(env).ok_or(RegistryError::NotInitialized)?;
 
-    admin.require_auth();
+    if caller == &admin {
+        admin.require_auth();
+    } else if storage::is_moderator(env, caller) {
+        caller.require_auth();
+    } else {
+        return Err(RegistryError::Unauthorized);
+    }
 
     let current_status = storage::get_expert_status(env, expert);
 
@@ -85,16 +112,23 @@ pub fn verify_expert(env: &Env, expert: &Address, data_uri: String) -> Result<()
         expert.clone(),
         current_status,
         ExpertStatus::Verified,
-        admin,
+        caller.clone(),
     );
 
     Ok(())
 }
 
-/// Ban an expert by setting their status to Banned (Admin only)
-pub fn ban_expert(env: &Env, expert: &Address) -> Result<(), RegistryError> {
+/// Ban an expert by setting their status to Banned (Admin or Moderator)
+pub fn ban_expert(env: &Env, caller: &Address, expert: &Address) -> Result<(), RegistryError> {
     let admin = storage::get_admin(env).ok_or(RegistryError::NotInitialized)?;
-    admin.require_auth();
+
+    if caller == &admin {
+        admin.require_auth();
+    } else if storage::is_moderator(env, caller) {
+        caller.require_auth();
+    } else {
+        return Err(RegistryError::Unauthorized);
+    }
 
     let current_status = storage::get_expert_status(env, expert);
 
@@ -111,7 +145,7 @@ pub fn ban_expert(env: &Env, expert: &Address) -> Result<(), RegistryError> {
         expert.clone(),
         current_status,
         ExpertStatus::Banned,
-        admin,
+        caller.clone(),
     );
 
     Ok(())

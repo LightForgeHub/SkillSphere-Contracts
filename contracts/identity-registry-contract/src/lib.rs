@@ -22,6 +22,16 @@ impl IdentityRegistryContract {
         contract::initialize_registry(&env, &admin)
     }
 
+    /// Add a moderator (Admin only)
+    pub fn add_moderator(env: Env, moderator: Address) -> Result<(), RegistryError> {
+        contract::add_moderator(&env, &moderator)
+    }
+
+    /// Remove a moderator (Admin only)
+    pub fn remove_moderator(env: Env, moderator: Address) -> Result<(), RegistryError> {
+        contract::remove_moderator(&env, &moderator)
+    }
+
     /// Batch Add an expert to the whitelist (Admin only)
     pub fn batch_add_experts(env: Env, experts: Vec<Address>) -> Result<(), RegistryError> {
         contract::batch_add_experts(env, experts)
@@ -32,15 +42,20 @@ impl IdentityRegistryContract {
         contract::batch_ban_experts(env, experts)
     }
 
-    /// Add an expert to the whitelist (Admin only)
+    /// Add an expert to the whitelist (Admin or Moderator)
     /// Also saves a profile data_uri reference (e.g., ipfs://...)
-    pub fn add_expert(env: Env, expert: Address, data_uri: String) -> Result<(), RegistryError> {
-        contract::verify_expert(&env, &expert, data_uri)
+    pub fn add_expert(
+        env: Env,
+        caller: Address,
+        expert: Address,
+        data_uri: String,
+    ) -> Result<(), RegistryError> {
+        contract::verify_expert(&env, &caller, &expert, data_uri)
     }
 
-    /// Ban an expert and revoke their verification status (Admin only)
-    pub fn ban_expert(env: Env, expert: Address) -> Result<(), RegistryError> {
-        contract::ban_expert(&env, &expert)
+    /// Ban an expert and revoke their verification status (Admin or Moderator)
+    pub fn ban_expert(env: Env, caller: Address, expert: Address) -> Result<(), RegistryError> {
+        contract::ban_expert(&env, &caller, &expert)
     }
 
     /// Unban an expert and restore their verification status (Admin only)

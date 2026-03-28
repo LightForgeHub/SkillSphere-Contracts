@@ -9,6 +9,7 @@ pub enum DataKey {
     Expert(Address),
     VerifiedExpertIndex(u64),
     TotalVerifiedCount,
+    Moderator(Address),
 }
 
 // Constants for TTL (Time To Live)
@@ -38,6 +39,30 @@ pub fn set_admin(env: &Env, admin: &Address) {
 /// Get the admin address
 pub fn get_admin(env: &Env) -> Option<Address> {
     env.storage().instance().get(&DataKey::Admin)
+}
+
+// ... [Moderator Helpers] ...
+
+/// Check if an address is a moderator
+pub fn is_moderator(env: &Env, address: &Address) -> bool {
+    env.storage()
+        .instance()
+        .get(&DataKey::Moderator(address.clone()))
+        .unwrap_or(false)
+}
+
+/// Set an address as a moderator
+pub fn set_moderator(env: &Env, address: &Address) {
+    env.storage()
+        .instance()
+        .set(&DataKey::Moderator(address.clone()), &true);
+}
+
+/// Remove an address from moderators
+pub fn remove_moderator(env: &Env, address: &Address) {
+    env.storage()
+        .instance()
+        .remove(&DataKey::Moderator(address.clone()));
 }
 
 // ... [Expert Helpers] ...
