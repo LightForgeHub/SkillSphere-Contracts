@@ -68,13 +68,14 @@ pub fn remove_moderator(env: &Env, address: &Address) {
 // ... [Expert Helpers] ...
 
 /// Set the expert record with status, data_uri and timestamp
-pub fn set_expert_record(env: &Env, expert: &Address, status: ExpertStatus, data_uri: String) {
+pub fn set_expert_record(env: &Env, expert: &Address, status: ExpertStatus, data_uri: String, category_id: u32) {
     let key = DataKey::Expert(expert.clone());
 
     let record = ExpertRecord {
         status,
         updated_at: env.ledger().timestamp(),
         data_uri,
+        category_id,
     };
 
     // 1. Save the data
@@ -107,6 +108,7 @@ pub fn get_expert_record(env: &Env, expert: &Address) -> ExpertRecord {
             status: ExpertStatus::Unverified,
             updated_at: 0,
             data_uri: String::from_str(env, ""),
+            category_id: 0,
         })
 }
 

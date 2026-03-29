@@ -31,7 +31,7 @@ pub fn batch_add_experts(env: Env, experts: Vec<Address>) -> Result<(), Registry
         }
         // Default empty URI for batch adds
         let empty_uri = String::from_str(&env, "");
-        storage::set_expert_record(&env, &expert, ExpertStatus::Verified, empty_uri);
+        storage::set_expert_record(&env, &expert, ExpertStatus::Verified, empty_uri, 0);
         storage::add_expert_to_index(&env, &expert);
         events::emit_status_change(&env, expert, status, ExpertStatus::Verified, admin.clone());
     }
@@ -54,7 +54,7 @@ pub fn batch_ban_experts(env: Env, experts: Vec<Address>) -> Result<(), Registry
             return Err(RegistryError::AlreadyBanned);
         }
         let existing = storage::get_expert_record(&env, &expert);
-        storage::set_expert_record(&env, &expert, ExpertStatus::Banned, existing.data_uri);
+        storage::set_expert_record(&env, &expert, ExpertStatus::Banned, existing.data_uri, existing.category_id);
         events::emit_status_change(&env, expert, status, ExpertStatus::Banned, admin.clone());
     }
 
@@ -82,6 +82,7 @@ pub fn verify_expert(
     caller: &Address,
     expert: &Address,
     data_uri: String,
+    category_id: u32,
 ) -> Result<(), RegistryError> {
     let admin = storage::get_admin(env).ok_or(RegistryError::NotInitialized)?;
 
@@ -104,7 +105,7 @@ pub fn verify_expert(
         return Err(RegistryError::UriTooLong);
     }
 
-    storage::set_expert_record(env, expert, ExpertStatus::Verified, data_uri);
+    storage::set_expert_record(env, expert, ExpertStatus::Verified, data_uri, category_id);
     storage::add_expert_to_index(env, expert);
 
     events::emit_status_change(
@@ -136,9 +137,9 @@ pub fn ban_expert(env: &Env, caller: &Address, expert: &Address) -> Result<(), R
         return Err(RegistryError::AlreadyBanned);
     }
 
-    // Preserve existing data_uri when banning
+    // Preserve existing data_uri and category_id when banning
     let existing = storage::get_expert_record(env, expert);
-    storage::set_expert_record(env, expert, ExpertStatus::Banned, existing.data_uri);
+    storage::set_expert_record(env, expert, ExpertStatus::Banned, existing.data_uri, existing.category_id);
 
     events::emit_status_change(
         env,
@@ -162,9 +163,9 @@ pub fn unban_expert(env: &Env, expert: &Address) -> Result<(), RegistryError> {
         return Err(RegistryError::NotBanned);
     }
 
-    // Preserve existing data_uri when unbanning
+    // Preserve existing data_uri and category_id when unbanning
     let existing = storage::get_expert_record(env, expert);
-    storage::set_expert_record(env, expert, ExpertStatus::Verified, existing.data_uri);
+    storage::set_expert_record(env, expert, ExpertStatus::Verified, existing.data_uri, existing.category_id);
 
     events::emit_status_change(
         env,
@@ -199,7 +200,7 @@ pub fn is_verified(env: &Env, expert: &Address) -> bool {
 }
 
 /// Allow a verified expert to update their own profile URI
-pub fn update_profile(env: &Env, expert: &Address, new_uri: String) -> Result<(), RegistryError> {
+pub fn update_profile(env: &Env, expert: &Address, new_uri: String, category_id: u32) -> Result<(), RegistryError> {
     expert.require_auth();
 
     // Validate URI length
@@ -213,7 +214,7 @@ pub fn update_profile(env: &Env, expert: &Address, new_uri: String) -> Result<()
     }
 
     // Update record preserving status
-    storage::set_expert_record(env, expert, status, new_uri.clone());
+    storage::set_expert_record(env, expert, status, new_uri.clone(), category_id);
     events::emit_profile_updated(env, expert.clone(), new_uri);
     Ok(())
 }
@@ -222,7 +223,7 @@ pub fn update_profile(env: &Env, expert: &Address, new_uri: String) -> Result<()
 /// Allows admins to update multiple expert metadata URIs in a single transaction
 pub fn batch_update_profiles(
     env: &Env,
-    updates: Vec<(Address, String, u32)>,
+    updates: Vec<(Address, String, u32, u32)>,
 ) -> Result<(), RegistryError> {
     // Limit batch size to prevent DoS
     if updates.len() > 20 {
@@ -233,7 +234,7 @@ pub fn batch_update_profiles(
     admin.require_auth();
 
     for update in updates {
-        let (expert, new_uri, status_u32) = update;
+        let (expert, new_uri, status_u32, category_id) = update;
 
         // Validate URI length
         if new_uri.len() > 64 {
@@ -249,7 +250,7 @@ pub fn batch_update_profiles(
         };
 
         // Update the expert record
-        storage::set_expert_record(env, &expert, status, new_uri);
+        storage::set_expert_record(env, &expert, status, new_uri, category_id);
     }
 
     Ok(())
