@@ -9,6 +9,7 @@ mod test;
 mod types;
 
 use crate::error::ReputationError;
+use crate::types::{ExpertStats, ReviewRecord};
 use soroban_sdk::{contract, contractimpl, Address, BytesN, Env};
 
 #[contract]
@@ -34,5 +35,22 @@ impl ReputationScoringContract {
 
     pub fn upgrade_contract(env: Env, new_wasm_hash: BytesN<32>) -> Result<(), ReputationError> {
         contract::upgrade_contract(&env, new_wasm_hash)
+    }
+
+    pub fn submit_review(
+        env: Env,
+        reviewer: Address,
+        booking_id: u64,
+        score: u32,
+    ) -> Result<(), ReputationError> {
+        contract::submit_review(&env, &reviewer, booking_id, score)
+    }
+
+    pub fn get_review(env: Env, booking_id: u64) -> Option<ReviewRecord> {
+        contract::get_review(&env, booking_id)
+    }
+
+    pub fn get_expert_stats(env: Env, expert: Address) -> ExpertStats {
+        contract::get_expert_stats(&env, &expert)
     }
 }
