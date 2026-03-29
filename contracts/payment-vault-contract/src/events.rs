@@ -72,5 +72,18 @@ pub fn oracle_updated(env: &Env, old_oracle: &Address, new_oracle: &Address) {
 /// Emitted when a user tops up a pending session
 pub fn session_topped_up(env: &Env, booking_id: u64, additional_duration: u64, extra_cost: i128) {
     let topics = (symbol_short!("top_up"), booking_id);
-    env.events().publish(topics, (additional_duration, extra_cost));
+    env.events()
+        .publish(topics, (additional_duration, extra_cost));
+}
+
+/// Emitted when an admin resolves a dispute by splitting escrowed funds
+pub fn dispute_resolved(env: &Env, booking_id: u64, user_refund: i128, expert_pay: i128) {
+    let topics = (symbol_short!("dispute"), booking_id);
+    env.events().publish(topics, (user_refund, expert_pay));
+}
+
+/// Emitted when admin recovers remaining disputed funds left in vault
+pub fn disputed_remainder_recovered(env: &Env, booking_id: u64, amount: i128) {
+    let topics = (symbol_short!("dsp_rcvr"), booking_id);
+    env.events().publish(topics, amount);
 }
