@@ -49,8 +49,9 @@ impl IdentityRegistryContract {
         caller: Address,
         expert: Address,
         data_uri: String,
+        category_id: u32,
     ) -> Result<(), RegistryError> {
-        contract::verify_expert(&env, &caller, &expert, data_uri)
+        contract::verify_expert(&env, &caller, &expert, data_uri, category_id)
     }
 
     /// Ban an expert and revoke their verification status (Admin or Moderator)
@@ -85,15 +86,15 @@ impl IdentityRegistryContract {
     }
 
     /// Allow a verified expert to update their own profile URI
-    pub fn update_profile(env: Env, expert: Address, new_uri: String) -> Result<(), RegistryError> {
-        contract::update_profile(&env, &expert, new_uri)
+    pub fn update_profile(env: Env, expert: Address, new_uri: String, category_id: u32) -> Result<(), RegistryError> {
+        contract::update_profile(&env, &expert, new_uri, category_id)
     }
 
     /// Batch update expert profiles (Admin only)
     /// Allows admins to update multiple expert metadata URIs in a single transaction
     pub fn batch_update_profiles(
         env: Env,
-        updates: Vec<(Address, String, u32)>,
+        updates: Vec<(Address, String, u32, u32)>,
     ) -> Result<(), RegistryError> {
         contract::batch_update_profiles(&env, updates)
     }
