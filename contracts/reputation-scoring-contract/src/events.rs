@@ -20,3 +20,10 @@ pub fn review_submitted(env: &Env, booking_id: u64, reviewer: &Address, expert: 
     env.events()
         .publish(topics, (booking_id, reviewer.clone(), expert.clone(), score));
 }
+
+/// Emitted when an expert is penalized via dispute.
+pub fn expert_penalized(env: &Env, expert: &Address, amount: u64) {
+    let topics = (symbol_short!("penalize"),);
+    env.events()
+        .publish(topics, (expert.clone(), amount));
+}

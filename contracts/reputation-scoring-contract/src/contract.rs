@@ -120,6 +120,32 @@ pub fn get_review(env: &Env, booking_id: u64) -> Option<ReviewRecord> {
     storage::get_review(env, booking_id)
 }
 
+pub fn penalize_expert(
+    env: &Env,
+    expert: &Address,
+    amount: u64,
+) -> Result<(), ReputationError> {
+    let admin = storage::get_admin(env).ok_or(ReputationError::NotInitialized)?;
+    admin.require_auth();
+
+    if storage::is_paused(env) {
+        return Err(ReputationError::ContractPaused);
+    }
+
+    if amount == 0 {
+        return Err(ReputationError::InvalidPenalty);
+    }
+
+    let mut stats = storage::get_expert_stats(env, expert);
+    // Saturating subtraction to prevent underflow
+    stats.total_score = stats.total_score.saturating_sub(amount);
+    storage::set_expert_stats(env, expert, &stats);
+
+    events::expert_penalized(env, expert, amount);
+
+    Ok(())
+}
+
 pub fn get_expert_stats(env: &Env, expert: &Address) -> ExpertStats {
     storage::get_expert_stats(env, expert)
 }

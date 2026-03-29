@@ -11,4 +11,5 @@ pub enum ReputationError {
     BookingNotComplete = 5,
     AlreadyReviewed = 6,
     NotBookingUser = 7,
+    InvalidPenalty = 8,
 }

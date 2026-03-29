@@ -50,6 +50,14 @@ impl ReputationScoringContract {
         contract::get_review(&env, booking_id)
     }
 
+    pub fn penalize_expert(
+        env: Env,
+        expert: Address,
+        amount: u64,
+    ) -> Result<(), ReputationError> {
+        contract::penalize_expert(&env, &expert, amount)
+    }
+
     pub fn get_expert_stats(env: Env, expert: Address) -> ExpertStats {
         contract::get_expert_stats(&env, &expert)
     }

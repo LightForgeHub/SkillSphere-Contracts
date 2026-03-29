@@ -298,3 +298,103 @@ fn test_score_boundary_values() {
     assert_eq!(stats.total_score, 1);
     assert_eq!(stats.review_count, 1);
 }
+
+// ── penalize_expert tests ────────────────────────────────────────────────
+
+#[test]
+fn test_penalize_expert_success() {
+    let (_env, _admin, user, expert, _vault_id, client) = setup_with_vault();
+
+    // Give the expert some score first
+    client.submit_review(&user, &1u64, &5u32);
+    assert_eq!(client.get_expert_stats(&expert).total_score, 5);
+
+    // Penalize by 3
+    let res = client.try_penalize_expert(&expert, &3u64);
+    assert!(res.is_ok());
+
+    let stats = client.get_expert_stats(&expert);
+    assert_eq!(stats.total_score, 2);
+    assert_eq!(stats.review_count, 1); // review_count unchanged
+}
+
+#[test]
+fn test_penalize_expert_no_underflow() {
+    let (_env, _admin, user, expert, _vault_id, client) = setup_with_vault();
+
+    // Score is 5
+    client.submit_review(&user, &1u64, &5u32);
+
+    // Penalize by 100 — should saturate to 0
+    client.penalize_expert(&expert, &100u64);
+
+    let stats = client.get_expert_stats(&expert);
+    assert_eq!(stats.total_score, 0);
+}
+
+#[test]
+fn test_penalize_expert_zero_score() {
+    let (_env, admin, _vault, client) = setup();
+    client.init(&admin, &_vault);
+
+    let expert = Address::generate(&_env);
+
+    // Expert has no stats (total_score=0), penalize should saturate to 0
+    client.penalize_expert(&expert, &5u64);
+
+    let stats = client.get_expert_stats(&expert);
+    assert_eq!(stats.total_score, 0);
+}
+
+#[test]
+fn test_penalize_expert_zero_amount_fails() {
+    let (_env, admin, vault, client) = setup();
+    client.init(&admin, &vault);
+
+    let expert = Address::generate(&_env);
+    let res = client.try_penalize_expert(&expert, &0u64);
+    assert_eq!(res, Err(Ok(ReputationError::InvalidPenalty)));
+}
+
+#[test]
+fn test_penalize_expert_emits_event() {
+    let (_env, _admin, user, expert, _vault_id, client) = setup_with_vault();
+
+    client.submit_review(&user, &1u64, &5u32);
+    client.penalize_expert(&expert, &2u64);
+
+    let events = _env.events().all();
+    let last = events.last().unwrap();
+
+    let topic: Symbol = last.1.get(0).unwrap().try_into_val(&_env).unwrap();
+    assert_eq!(topic, Symbol::new(&_env, "penalize"));
+}
+
+#[test]
+fn test_penalize_expert_paused() {
+    let (_env, admin, vault, client) = setup();
+    client.init(&admin, &vault);
+    client.pause();
+
+    let expert = Address::generate(&_env);
+    let res = client.try_penalize_expert(&expert, &1u64);
+    assert_eq!(res, Err(Ok(ReputationError::ContractPaused)));
+}
+
+#[test]
+#[should_panic]
+fn test_penalize_expert_not_admin() {
+    let env = Env::default();
+
+    let contract_id = env.register(ReputationScoringContract, ());
+    let client = ReputationScoringContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let vault = Address::generate(&env);
+    let expert = Address::generate(&env);
+
+    client.init(&admin, &vault);
+
+    // No auth mocked — should panic on admin.require_auth()
+    client.penalize_expert(&expert, &1u64);
+}
