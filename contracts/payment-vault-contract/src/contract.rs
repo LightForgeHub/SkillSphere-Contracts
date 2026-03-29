@@ -411,3 +411,63 @@ pub fn reject_session(env: &Env, expert: &Address, booking_id: u64) -> Result<()
 
     Ok(())
 }
+
+/// Admin dispute resolution: forcefully split escrowed funds for a Pending booking.
+/// Used when the Oracle crashes or an unresolvable dispute occurs between user and expert.
+pub fn resolve_dispute(
+    env: &Env,
+    booking_id: u64,
+    user_refund: i128,
+    expert_pay: i128,
+) -> Result<(), VaultError> {
+    if storage::is_paused(env) {
+        return Err(VaultError::ContractPaused);
+    }
+
+    // 1. Require admin authorization
+    let admin = storage::get_admin(env).ok_or(VaultError::NotInitialized)?;
+    admin.require_auth();
+
+    // 2. Get booking and verify it exists
+    let booking = storage::get_booking(env, booking_id).ok_or(VaultError::BookingNotFound)?;
+
+    // 3. Verify booking is in Pending status
+    if booking.status != BookingStatus::Pending {
+        return Err(VaultError::BookingNotPending);
+    }
+
+    // 4. Validate split amounts
+    if user_refund < 0 || expert_pay < 0 {
+        return Err(VaultError::InvalidAmount);
+    }
+
+    let total_split = user_refund
+        .checked_add(expert_pay)
+        .ok_or(VaultError::Overflow)?;
+
+    if total_split > booking.total_deposit {
+        return Err(VaultError::InvalidAmount);
+    }
+
+    // 5. Get token contract
+    let token_address = storage::get_token(env);
+    let token_client = token::Client::new(env, &token_address);
+    let contract_address = env.current_contract_address();
+
+    // 6. Execute transfers
+    if user_refund > 0 {
+        token_client.transfer(&contract_address, &booking.user, &user_refund);
+    }
+
+    if expert_pay > 0 {
+        token_client.transfer(&contract_address, &booking.expert, &expert_pay);
+    }
+
+    // 7. Update booking status to DisputedAndResolved
+    storage::update_booking_status(env, booking_id, BookingStatus::DisputedAndResolved);
+
+    // 8. Emit event
+    events::dispute_resolved(env, booking_id, user_refund, expert_pay);
+
+    Ok(())
+}

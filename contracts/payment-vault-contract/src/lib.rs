@@ -122,6 +122,18 @@ impl PaymentVaultContract {
         contract::cancel_booking(&env, &user, booking_id)
     }
 
+    /// Resolve a dispute by forcefully splitting escrowed funds (Admin-only).
+    /// Used when the Oracle crashes or a severe, unresolvable dispute occurs.
+    /// `user_refund + expert_pay` must not exceed the booking's `total_deposit`.
+    pub fn resolve_dispute(
+        env: Env,
+        booking_id: u64,
+        user_refund: i128,
+        expert_pay: i128,
+    ) -> Result<(), VaultError> {
+        contract::resolve_dispute(&env, booking_id, user_refund, expert_pay)
+    }
+
     /// Get a paginated list of booking IDs for a specific user.
     /// `start_index` is 0-based. Returns at most `limit` booking IDs.
     pub fn get_user_bookings(env: Env, user: Address, start_index: u32, limit: u32) -> Vec<u64> {

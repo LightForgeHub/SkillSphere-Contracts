@@ -1,4 +1,5 @@
 #![cfg(test)]
+use crate::types::BookingStatus;
 use crate::{PaymentVaultContract, PaymentVaultContractClient};
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
@@ -1478,5 +1479,241 @@ fn test_top_up_wrong_user_fails() {
     };
 
     let result = client.try_top_up_session(&other_user, &booking_id, &900);
+    assert!(result.is_err());
+}
+
+// ==================== Dispute Resolution Tests ====================
+
+#[test]
+fn test_resolve_dispute_admin_splits_funds() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let expert = Address::generate(&env);
+    let oracle = Address::generate(&env);
+    let registry = create_mock_registry(&env);
+
+    let token_admin = Address::generate(&env);
+    let token = create_token_contract(&env, &token_admin);
+    token.mint(&user, &10_000);
+
+    let client = create_client(&env);
+    client.init(&admin, &token.address, &oracle, &registry);
+
+    let booking_id = {
+        client.set_my_rate(&expert, &10_i128);
+        client.book_session(&user, &expert, &100)
+    };
+
+    // Deposit is 1000. Split: 600 to user, 400 to expert.
+    client.resolve_dispute(&booking_id, &600, &400);
+
+    assert_eq!(token.balance(&user), 9_600);
+    assert_eq!(token.balance(&expert), 400);
+    assert_eq!(token.balance(&client.address), 0);
+
+    let booking = client.get_booking(&booking_id).unwrap();
+    assert_eq!(booking.status, BookingStatus::DisputedAndResolved);
+}
+
+#[test]
+fn test_resolve_dispute_only_admin_can_call() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let expert = Address::generate(&env);
+    let oracle = Address::generate(&env);
+    let registry = create_mock_registry(&env);
+
+    let token_admin = Address::generate(&env);
+    let token = create_token_contract(&env, &token_admin);
+    token.mint(&user, &10_000);
+
+    let client = create_client(&env);
+    client.init(&admin, &token.address, &oracle, &registry);
+
+    let booking_id = {
+        client.set_my_rate(&expert, &10_i128);
+        client.book_session(&user, &expert, &100)
+    };
+
+    // Clear all mocked auths — now calls requiring auth will fail
+    env.set_auths(&[]);
+
+    let result = client.try_resolve_dispute(&booking_id, &500, &500);
+    assert!(result.is_err());
+}
+
+#[test]
+#[should_panic]
+fn test_resolve_dispute_split_exceeds_deposit_panics() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let expert = Address::generate(&env);
+    let oracle = Address::generate(&env);
+    let registry = create_mock_registry(&env);
+
+    let token_admin = Address::generate(&env);
+    let token = create_token_contract(&env, &token_admin);
+    token.mint(&user, &10_000);
+
+    let client = create_client(&env);
+    client.init(&admin, &token.address, &oracle, &registry);
+
+    let booking_id = {
+        client.set_my_rate(&expert, &10_i128);
+        client.book_session(&user, &expert, &100)
+    };
+
+    // Deposit is 1000. Split of 600 + 500 = 1100 exceeds deposit.
+    client.resolve_dispute(&booking_id, &600, &500);
+}
+
+#[test]
+fn test_resolve_dispute_split_exceeds_deposit_returns_error() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let expert = Address::generate(&env);
+    let oracle = Address::generate(&env);
+    let registry = create_mock_registry(&env);
+
+    let token_admin = Address::generate(&env);
+    let token = create_token_contract(&env, &token_admin);
+    token.mint(&user, &10_000);
+
+    let client = create_client(&env);
+    client.init(&admin, &token.address, &oracle, &registry);
+
+    let booking_id = {
+        client.set_my_rate(&expert, &10_i128);
+        client.book_session(&user, &expert, &100)
+    };
+
+    // Deposit is 1000. Split of 600 + 500 = 1100 exceeds deposit.
+    let result = client.try_resolve_dispute(&booking_id, &600, &500);
+    assert!(result.is_err());
+
+    // Balances unchanged
+    assert_eq!(token.balance(&user), 9_000);
+    assert_eq!(token.balance(&client.address), 1_000);
+}
+
+#[test]
+fn test_resolve_dispute_only_pending_bookings() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let expert = Address::generate(&env);
+    let oracle = Address::generate(&env);
+    let registry = create_mock_registry(&env);
+
+    let token_admin = Address::generate(&env);
+    let token = create_token_contract(&env, &token_admin);
+    token.mint(&user, &10_000);
+
+    let client = create_client(&env);
+    client.init(&admin, &token.address, &oracle, &registry);
+
+    let booking_id = {
+        client.set_my_rate(&expert, &10_i128);
+        client.book_session(&user, &expert, &100)
+    };
+
+    // Finalize first — booking is now Complete
+    client.finalize_session(&booking_id, &50);
+
+    // Attempt dispute resolution on a completed booking
+    let result = client.try_resolve_dispute(&booking_id, &250, &250);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_resolve_dispute_partial_split_leaves_remainder_in_vault() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let expert = Address::generate(&env);
+    let oracle = Address::generate(&env);
+    let registry = create_mock_registry(&env);
+
+    let token_admin = Address::generate(&env);
+    let token = create_token_contract(&env, &token_admin);
+    token.mint(&user, &10_000);
+
+    let client = create_client(&env);
+    client.init(&admin, &token.address, &oracle, &registry);
+
+    let booking_id = {
+        client.set_my_rate(&expert, &10_i128);
+        client.book_session(&user, &expert, &100)
+    };
+
+    // Deposit is 1000. Split only 300 + 200 = 500. Remaining 500 stays in vault.
+    client.resolve_dispute(&booking_id, &300, &200);
+
+    assert_eq!(token.balance(&user), 9_300);
+    assert_eq!(token.balance(&expert), 200);
+    assert_eq!(token.balance(&client.address), 500);
+}
+
+#[test]
+fn test_resolve_dispute_blocked_when_paused() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let expert = Address::generate(&env);
+    let oracle = Address::generate(&env);
+    let registry = create_mock_registry(&env);
+
+    let token_admin = Address::generate(&env);
+    let token = create_token_contract(&env, &token_admin);
+    token.mint(&user, &10_000);
+
+    let client = create_client(&env);
+    client.init(&admin, &token.address, &oracle, &registry);
+
+    let booking_id = {
+        client.set_my_rate(&expert, &10_i128);
+        client.book_session(&user, &expert, &100)
+    };
+
+    client.pause();
+
+    let result = client.try_resolve_dispute(&booking_id, &500, &500);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_resolve_dispute_nonexistent_booking() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let oracle = Address::generate(&env);
+    let registry = create_mock_registry(&env);
+
+    let token_admin = Address::generate(&env);
+    let token = create_token_contract(&env, &token_admin);
+
+    let client = create_client(&env);
+    client.init(&admin, &token.address, &oracle, &registry);
+
+    let result = client.try_resolve_dispute(&999, &100, &100);
     assert!(result.is_err());
 }
