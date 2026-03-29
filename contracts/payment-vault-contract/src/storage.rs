@@ -110,6 +110,10 @@ pub fn update_booking_status(env: &Env, booking_id: u64, status: BookingStatus) 
     }
 }
 
+pub fn update_booking(env: &Env, booking: &BookingRecord) {
+    save_booking(env, booking);
+}
+
 pub fn update_booking_started_at(env: &Env, booking_id: u64, started_at: u64) {
     if let Some(mut booking) = get_booking(env, booking_id) {
         booking.started_at = Some(started_at);

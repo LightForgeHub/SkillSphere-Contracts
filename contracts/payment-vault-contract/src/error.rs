@@ -16,4 +16,6 @@ pub enum VaultError {
     ExpertNotVerified = 10,
     SessionAlreadyStarted = 11,
     Overflow = 12,
+    BookingNotDisputed = 13,
+    RemainderAlreadyRecovered = 14,
 }

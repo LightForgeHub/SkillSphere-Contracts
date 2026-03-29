@@ -81,3 +81,9 @@ pub fn dispute_resolved(env: &Env, booking_id: u64, user_refund: i128, expert_pa
     let topics = (symbol_short!("dispute"), booking_id);
     env.events().publish(topics, (user_refund, expert_pay));
 }
+
+/// Emitted when admin recovers remaining disputed funds left in vault
+pub fn disputed_remainder_recovered(env: &Env, booking_id: u64, amount: i128) {
+    let topics = (symbol_short!("dsp_rcvr"), booking_id);
+    env.events().publish(topics, amount);
+}

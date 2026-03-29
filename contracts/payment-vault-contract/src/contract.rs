@@ -119,6 +119,9 @@ pub fn book_session(
         status: BookingStatus::Pending,
         created_at: env.ledger().timestamp(),
         started_at: None,
+        dispute_user_refund: None,
+        dispute_expert_pay: None,
+        dispute_remainder_recovered: false,
     };
 
     // Save booking
@@ -429,7 +432,7 @@ pub fn resolve_dispute(
     admin.require_auth();
 
     // 2. Get booking and verify it exists
-    let booking = storage::get_booking(env, booking_id).ok_or(VaultError::BookingNotFound)?;
+    let mut booking = storage::get_booking(env, booking_id).ok_or(VaultError::BookingNotFound)?;
 
     // 3. Verify booking is in Pending status
     if booking.status != BookingStatus::Pending {
@@ -463,11 +466,63 @@ pub fn resolve_dispute(
         token_client.transfer(&contract_address, &booking.expert, &expert_pay);
     }
 
-    // 7. Update booking status to DisputedAndResolved
-    storage::update_booking_status(env, booking_id, BookingStatus::DisputedAndResolved);
+    // 7. Persist dispute split and transition booking to DisputedAndResolved
+    booking.status = BookingStatus::DisputedAndResolved;
+    booking.dispute_user_refund = Some(user_refund);
+    booking.dispute_expert_pay = Some(expert_pay);
+    booking.dispute_remainder_recovered = false;
+    storage::update_booking(env, &booking);
 
     // 8. Emit event
     events::dispute_resolved(env, booking_id, user_refund, expert_pay);
 
     Ok(())
+}
+
+/// Admin-only recovery path for disputed remainder left in vault after resolve_dispute.
+/// Recovers `total_deposit - dispute_user_refund - dispute_expert_pay` exactly once.
+pub fn recover_disputed_remainder(env: &Env, booking_id: u64) -> Result<i128, VaultError> {
+    if storage::is_paused(env) {
+        return Err(VaultError::ContractPaused);
+    }
+
+    let admin = storage::get_admin(env).ok_or(VaultError::NotInitialized)?;
+    admin.require_auth();
+
+    let mut booking = storage::get_booking(env, booking_id).ok_or(VaultError::BookingNotFound)?;
+
+    if booking.status != BookingStatus::DisputedAndResolved {
+        return Err(VaultError::BookingNotDisputed);
+    }
+
+    if booking.dispute_remainder_recovered {
+        return Err(VaultError::RemainderAlreadyRecovered);
+    }
+
+    let user_refund = booking.dispute_user_refund.unwrap_or(0);
+    let expert_pay = booking.dispute_expert_pay.unwrap_or(0);
+
+    let remainder = booking
+        .total_deposit
+        .checked_sub(user_refund)
+        .and_then(|v| v.checked_sub(expert_pay))
+        .ok_or(VaultError::Overflow)?;
+
+    if remainder < 0 {
+        return Err(VaultError::InvalidAmount);
+    }
+
+    let token_address = storage::get_token(env);
+    let token_client = token::Client::new(env, &token_address);
+    let contract_address = env.current_contract_address();
+
+    if remainder > 0 {
+        token_client.transfer(&contract_address, &admin, &remainder);
+    }
+
+    booking.dispute_remainder_recovered = true;
+    storage::update_booking(env, &booking);
+    events::disputed_remainder_recovered(env, booking_id, remainder);
+
+    Ok(remainder)
 }

@@ -134,6 +134,12 @@ impl PaymentVaultContract {
         contract::resolve_dispute(&env, booking_id, user_refund, expert_pay)
     }
 
+    /// Recover any disputed remainder still locked in vault after dispute split (Admin-only).
+    /// Can be executed once per booking after status reaches DisputedAndResolved.
+    pub fn recover_disputed_remainder(env: Env, booking_id: u64) -> Result<i128, VaultError> {
+        contract::recover_disputed_remainder(&env, booking_id)
+    }
+
     /// Get a paginated list of booking IDs for a specific user.
     /// `start_index` is 0-based. Returns at most `limit` booking IDs.
     pub fn get_user_bookings(env: Env, user: Address, start_index: u32, limit: u32) -> Vec<u64> {
