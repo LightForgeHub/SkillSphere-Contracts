@@ -19,4 +19,5 @@ pub enum RegistryError {
     NotVerified = 8,
     UriTooLong = 9,
     NotBanned = 10,
+    Unauthorized = 11,
 }

@@ -1,0 +1,41 @@
+[package]
+name = "calendar-contract"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "lib"]
+doctest = false
+
+[dependencies]
+soroban-sdk = { workspace = true }
+
+[dev-dependencies]
+soroban-sdk = { workspace = true, features = ["testutils"] }
+
+[profile.release]
+opt-level = 'z'
+overflow-checks = true
+debug = 0
+strip = true
+debug-assertions = false
+panic = 'abort'
+codegen-units = 1
+lto = true
+
+[profile.test]
+opt-level = 0
+debug = true
+debug-assertions = true
+overflow-checks = true
+lto = false
+panic = 'unwind'
+incremental = true
+codegen-units = 256
+rpath = false
+
+[package.metadata.soroban]
+generate-snapshots = false
+snapshot-dir = "test_snapshots"
+verbose-snapshots = false

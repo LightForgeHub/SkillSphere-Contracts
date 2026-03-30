@@ -79,6 +79,17 @@ impl PaymentVaultContract {
         contract::book_session(&env, &user, &expert, max_duration)
     }
 
+    /// Add more time to a live (or pending) session without disconnecting.
+    /// Deducts corresponding tokens from the user based on the expert's rate.
+    pub fn top_up_session(
+        env: Env,
+        user: Address,
+        booking_id: u64,
+        additional_duration: u64,
+    ) -> Result<(), VaultError> {
+        contract::top_up_session(&env, &user, booking_id, additional_duration)
+    }
+
     /// Finalize a session (Oracle-only).
     /// Calculates payments based on actual duration and processes refunds.
     pub fn finalize_session(
@@ -117,6 +128,24 @@ impl PaymentVaultContract {
     /// of the payment token (e.g., stroops for XLM, or 10^18 base units for 18-decimal tokens).
     pub fn cancel_booking(env: Env, user: Address, booking_id: u64) -> Result<(), VaultError> {
         contract::cancel_booking(&env, &user, booking_id)
+    }
+
+    /// Resolve a dispute by forcefully splitting escrowed funds (Admin-only).
+    /// Used when the Oracle crashes or a severe, unresolvable dispute occurs.
+    /// `user_refund + expert_pay` must not exceed the booking's `total_deposit`.
+    pub fn resolve_dispute(
+        env: Env,
+        booking_id: u64,
+        user_refund: i128,
+        expert_pay: i128,
+    ) -> Result<(), VaultError> {
+        contract::resolve_dispute(&env, booking_id, user_refund, expert_pay)
+    }
+
+    /// Recover any disputed remainder still locked in vault after dispute split (Admin-only).
+    /// Can be executed once per booking after status reaches DisputedAndResolved.
+    pub fn recover_disputed_remainder(env: Env, booking_id: u64) -> Result<i128, VaultError> {
+        contract::recover_disputed_remainder(&env, booking_id)
     }
 
     /// Get a paginated list of booking IDs for a specific user.

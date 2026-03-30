@@ -41,7 +41,7 @@ fn test_data_uri_persisted_on_verify() {
     let uri = String::from_str(&env, "ipfs://persisted");
 
     client.init(&admin);
-    client.add_expert(&expert, &uri);
+    client.add_expert(&admin, &expert, &uri, &0u32);
 
     // Read storage as contract and assert data_uri persisted
     env.as_contract(&contract_id, || {
@@ -64,10 +64,10 @@ fn test_update_profile_updates_uri_and_emits_event() {
     let uri2 = String::from_str(&env, "ipfs://updated");
 
     client.init(&admin);
-    client.add_expert(&expert, &uri1);
+    client.add_expert(&admin, &expert, &uri1, &0u32);
 
     // Update profile URI
-    client.update_profile(&expert, &uri2);
+    client.update_profile(&expert, &uri2, &1u32);
 
     // Assert record updated
     env.as_contract(&contract_id, || {
@@ -92,18 +92,18 @@ fn test_update_profile_rejections() {
 
     // NotVerified when updating without being verified
     let new_uri = String::from_str(&env, "ipfs://new");
-    let res = client.try_update_profile(&unverified, &new_uri);
+    let res = client.try_update_profile(&unverified, &new_uri, &0u32);
     assert_eq!(res, Err(Ok(RegistryError::NotVerified)));
 
     // Verify then try overlong uri
     let expert = Address::generate(&env);
     let ok_uri = String::from_str(&env, "ipfs://ok");
-    client.add_expert(&expert, &ok_uri);
+    client.add_expert(&admin, &expert, &ok_uri, &0u32);
 
     // Build >64 length string
     let long_str = "a".repeat(65);
     let long_uri = String::from_str(&env, long_str.as_str());
-    let res2 = client.try_update_profile(&expert, &long_uri);
+    let res2 = client.try_update_profile(&expert, &long_uri, &0u32);
     assert_eq!(res2, Err(Ok(RegistryError::UriTooLong)));
 }
 
@@ -239,7 +239,7 @@ fn test_add_expert() {
     client.init(&admin);
 
     let data_uri = String::from_str(&env, "ipfs://profile1");
-    let res = client.try_add_expert(&expert, &data_uri);
+    let res = client.try_add_expert(&admin, &expert, &data_uri, &0u32);
     assert!(res.is_ok());
 
     assert_eq!(
@@ -250,7 +250,7 @@ fn test_add_expert() {
                 function: AuthorizedFunction::Contract((
                     contract_id.clone(),
                     Symbol::new(&env, "add_expert"),
-                    (expert.clone(), data_uri.clone()).into_val(&env)
+                    (admin.clone(), expert.clone(), data_uri.clone(), 0u32).into_val(&env)
                 )),
                 sub_invocations: std::vec![]
             }
@@ -271,7 +271,8 @@ fn test_add_expert_unauthorized() {
 
     client.init(&admin);
     let data_uri = String::from_str(&env, "ipfs://unauth");
-    client.add_expert(&expert, &data_uri);
+    // admin is the caller but no auth is mocked — should panic
+    client.add_expert(&admin, &expert, &data_uri, &0u32);
 }
 
 #[test]
@@ -287,7 +288,7 @@ fn test_expert_status_changed_event() {
 
     client.init(&admin);
     let data_uri = String::from_str(&env, "ipfs://event");
-    client.add_expert(&expert, &data_uri);
+    client.add_expert(&admin, &expert, &data_uri, &0u32);
 
     let events = env.events().all();
     let event = events.last().unwrap();
@@ -313,21 +314,21 @@ fn test_ban_expert() {
     // Verify the expert first
     env.mock_all_auths();
     let data_uri = String::from_str(&env, "ipfs://ban");
-    client.add_expert(&expert, &data_uri);
+    client.add_expert(&admin, &expert, &data_uri, &0u32);
 
     // Verify status is Verified
     let status = client.get_status(&expert);
     assert_eq!(status, ExpertStatus::Verified);
 
     // Ban the expert (should succeed)
-    client.ban_expert(&expert);
+    client.ban_expert(&admin, &expert);
 
     // Check that status is now Banned
     let status = client.get_status(&expert);
     assert_eq!(status, ExpertStatus::Banned);
 
     // Test: Try to ban again (should fail with AlreadyBanned)
-    let result = client.try_ban_expert(&expert);
+    let result = client.try_ban_expert(&admin, &expert);
     assert_eq!(result, Err(Ok(RegistryError::AlreadyBanned)));
 }
 
@@ -345,13 +346,14 @@ fn test_ban_expert_unauthorized() {
 
     env.mock_all_auths();
     let data_uri = String::from_str(&env, "ipfs://ban-unauth");
-    client.add_expert(&expert, &data_uri);
+    client.add_expert(&admin, &expert, &data_uri, &0u32);
 
     env.mock_all_auths_allowing_non_root_auth();
 
     env.mock_auths(&[]);
 
-    client.ban_expert(&expert);
+    // admin is the caller but no auth is mocked — should panic
+    client.ban_expert(&admin, &expert);
 }
 
 #[test]
@@ -372,7 +374,7 @@ fn test_ban_unverified_expert() {
 
     // Ban an expert who was never verified (should still succeed)
     env.mock_all_auths();
-    client.ban_expert(&expert);
+    client.ban_expert(&admin, &expert);
 
     // Status should be Banned now
     let status = client.get_status(&expert);
@@ -399,9 +401,9 @@ fn test_ban_expert_workflow() {
     let uri1 = String::from_str(&env, "ipfs://u1");
     let uri2 = String::from_str(&env, "ipfs://u2");
     let uri3 = String::from_str(&env, "ipfs://u3");
-    client.add_expert(&expert1, &uri1);
-    client.add_expert(&expert2, &uri2);
-    client.add_expert(&expert3, &uri3);
+    client.add_expert(&admin, &expert1, &uri1, &0u32);
+    client.add_expert(&admin, &expert2, &uri2, &0u32);
+    client.add_expert(&admin, &expert3, &uri3, &0u32);
 
     // Check all are verified
     assert_eq!(client.get_status(&expert1), ExpertStatus::Verified);
@@ -409,7 +411,7 @@ fn test_ban_expert_workflow() {
     assert_eq!(client.get_status(&expert3), ExpertStatus::Verified);
 
     // Ban expert2
-    client.ban_expert(&expert2);
+    client.ban_expert(&admin, &expert2);
 
     // Verify expert2 is banned, others remain verified
     assert_eq!(client.get_status(&expert1), ExpertStatus::Verified);
@@ -417,7 +419,7 @@ fn test_ban_expert_workflow() {
     assert_eq!(client.get_status(&expert3), ExpertStatus::Verified);
 
     // Ban expert1
-    client.ban_expert(&expert1);
+    client.ban_expert(&admin, &expert1);
 
     // Verify expert1 is now banned
     assert_eq!(client.get_status(&expert1), ExpertStatus::Banned);
@@ -432,11 +434,12 @@ fn test_ban_before_contract_initialized() {
     let client = IdentityRegistryContractClient::new(&env, &contract_id);
 
     let expert = Address::generate(&env);
+    let caller = Address::generate(&env);
 
     env.mock_all_auths();
 
     // Try to ban without initializing (should fail)
-    let result = client.try_ban_expert(&expert);
+    let result = client.try_ban_expert(&caller, &expert);
     assert_eq!(result, Err(Ok(RegistryError::NotInitialized)));
 }
 
@@ -459,11 +462,11 @@ fn test_complete_expert_lifecycle() {
 
     // 2. Verify the expert
     let data_uri = String::from_str(&env, "ipfs://life");
-    client.add_expert(&expert, &data_uri);
+    client.add_expert(&admin, &expert, &data_uri, &0u32);
     assert_eq!(client.get_status(&expert), ExpertStatus::Verified);
 
     // 3. Ban the expert
-    client.ban_expert(&expert);
+    client.ban_expert(&admin, &expert);
     assert_eq!(client.get_status(&expert), ExpertStatus::Banned);
 }
 
@@ -486,12 +489,12 @@ fn test_getters() {
     // Test 2: Verify an expert and check is_verified (should be true)
     let expert = Address::generate(&env);
     let data_uri = String::from_str(&env, "ipfs://getters");
-    client.add_expert(&expert, &data_uri);
+    client.add_expert(&admin, &expert, &data_uri, &0u32);
     assert_eq!(client.is_verified(&expert), true);
     assert_eq!(client.get_status(&expert), ExpertStatus::Verified);
 
     // Test 3: Ban the expert and check is_verified (should be false)
-    client.ban_expert(&expert);
+    client.ban_expert(&admin, &expert);
     assert_eq!(client.is_verified(&expert), false);
     assert_eq!(client.get_status(&expert), ExpertStatus::Banned);
 }
@@ -515,9 +518,9 @@ fn test_expert_directory_enumeration() {
     let uri1 = String::from_str(&env, "ipfs://e1");
     let uri2 = String::from_str(&env, "ipfs://e2");
     let uri3 = String::from_str(&env, "ipfs://e3");
-    client.add_expert(&expert1, &uri1);
-    client.add_expert(&expert2, &uri2);
-    client.add_expert(&expert3, &uri3);
+    client.add_expert(&admin, &expert1, &uri1, &0u32);
+    client.add_expert(&admin, &expert2, &uri2, &0u32);
+    client.add_expert(&admin, &expert3, &uri3, &0u32);
 
     // Total should be 3
     assert_eq!(client.get_total_experts(), 3u64);
@@ -542,13 +545,13 @@ fn test_expert_directory_no_duplicates_on_reverify() {
     client.init(&admin);
 
     let uri = String::from_str(&env, "ipfs://expert");
-    client.add_expert(&expert, &uri);
+    client.add_expert(&admin, &expert, &uri, &0u32);
 
     // Total is 1
     assert_eq!(client.get_total_experts(), 1u64);
 
     // Re-verifying an already verified expert returns AlreadyVerified
-    let result = client.try_add_expert(&expert, &uri);
+    let result = client.try_add_expert(&admin, &expert, &uri, &0u32);
     assert_eq!(result, Err(Ok(RegistryError::AlreadyVerified)));
 
     // Total remains 1 — no duplicate in the index
@@ -606,11 +609,11 @@ fn test_batch_update_profiles() {
     let uri4 = String::from_str(&env, "ipfs://original4");
     let uri5 = String::from_str(&env, "ipfs://original5");
 
-    client.add_expert(&expert1, &uri1);
-    client.add_expert(&expert2, &uri2);
-    client.add_expert(&expert3, &uri3);
-    client.add_expert(&expert4, &uri4);
-    client.add_expert(&expert5, &uri5);
+    client.add_expert(&admin, &expert1, &uri1, &0u32);
+    client.add_expert(&admin, &expert2, &uri2, &0u32);
+    client.add_expert(&admin, &expert3, &uri3, &0u32);
+    client.add_expert(&admin, &expert4, &uri4, &0u32);
+    client.add_expert(&admin, &expert5, &uri5, &0u32);
 
     // Prepare batch updates with new URIs
     let new_uri1 = String::from_str(&env, "ipfs://updated1");
@@ -621,11 +624,11 @@ fn test_batch_update_profiles() {
 
     let updates = vec![
         &env,
-        (expert1.clone(), new_uri1.clone(), 1u32), // Verified
-        (expert2.clone(), new_uri2.clone(), 1u32), // Verified
-        (expert3.clone(), new_uri3.clone(), 1u32), // Verified
-        (expert4.clone(), new_uri4.clone(), 1u32), // Verified
-        (expert5.clone(), new_uri5.clone(), 1u32), // Verified
+        (expert1.clone(), new_uri1.clone(), 1u32, 0u32),
+        (expert2.clone(), new_uri2.clone(), 1u32, 0u32),
+        (expert3.clone(), new_uri3.clone(), 1u32, 0u32),
+        (expert4.clone(), new_uri4.clone(), 1u32, 0u32),
+        (expert5.clone(), new_uri5.clone(), 1u32, 0u32),
     ];
 
     // Execute batch update
@@ -671,7 +674,7 @@ fn test_batch_update_profiles_max_vec() {
     for _ in 0..21 {
         let expert = Address::generate(&env);
         let uri = String::from_str(&env, "ipfs://test");
-        updates.push_back((expert, uri, 1u32));
+        updates.push_back((expert, uri, 1u32, 0u32));
     }
 
     // This should fail with ExpertVecMax error
@@ -691,13 +694,13 @@ fn test_batch_update_profiles_uri_too_long() {
 
     let expert = Address::generate(&env);
     let uri = String::from_str(&env, "ipfs://initial");
-    client.add_expert(&expert, &uri);
+    client.add_expert(&admin, &expert, &uri, &0u32);
 
     // Create update with URI that's too long (>64 chars)
     let long_str = "a".repeat(65);
     let long_uri = String::from_str(&env, long_str.as_str());
 
-    let updates = vec![&env, (expert.clone(), long_uri, 1u32)];
+    let updates = vec![&env, (expert.clone(), long_uri, 1u32, 0u32)];
 
     // This should fail with UriTooLong error
     let result = client.try_batch_update_profiles(&updates);
@@ -720,7 +723,7 @@ fn test_expert_pagination() {
     for _ in 0..15 {
         let expert = Address::generate(&env);
         let uri = String::from_str(&env, "ipfs://expert");
-        client.add_expert(&expert, &uri);
+        client.add_expert(&admin, &expert, &uri, &0u32);
         experts.push_back(expert);
     }
 
@@ -759,14 +762,14 @@ fn test_unban_expert() {
 
     env.mock_all_auths();
     let data_uri = String::from_str(&env, "ipfs://unban");
-    client.add_expert(&expert, &data_uri);
+    client.add_expert(&admin, &expert, &data_uri, &0u32);
 
     // Initial status: Verified
     assert_eq!(client.get_status(&expert), ExpertStatus::Verified);
     let initial_total = client.get_total_experts();
 
     // Ban the expert
-    client.ban_expert(&expert);
+    client.ban_expert(&admin, &expert);
     assert_eq!(client.get_status(&expert), ExpertStatus::Banned);
 
     // Unban the expert
@@ -787,3 +790,153 @@ fn test_unban_expert() {
     assert_eq!(result, Err(Ok(RegistryError::NotBanned)));
 }
 
+#[test]
+fn test_moderator_can_verify_expert() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(IdentityRegistryContract, ());
+    let client = IdentityRegistryContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let moderator = Address::generate(&env);
+    let expert = Address::generate(&env);
+
+    client.init(&admin);
+
+    // Admin adds a moderator
+    client.add_moderator(&moderator);
+
+    // Moderator verifies an expert (should succeed)
+    let uri = String::from_str(&env, "ipfs://mod-verify");
+    let res = client.try_add_expert(&moderator, &expert, &uri, &0u32);
+    assert!(res.is_ok());
+
+    assert_eq!(client.get_status(&expert), ExpertStatus::Verified);
+}
+
+#[test]
+fn test_moderator_can_ban_expert() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(IdentityRegistryContract, ());
+    let client = IdentityRegistryContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let moderator = Address::generate(&env);
+    let expert = Address::generate(&env);
+
+    client.init(&admin);
+    client.add_moderator(&moderator);
+
+    // Verify expert first (by admin)
+    let uri = String::from_str(&env, "ipfs://mod-ban");
+    client.add_expert(&admin, &expert, &uri, &0u32);
+
+    // Moderator bans the expert (should succeed)
+    let res = client.try_ban_expert(&moderator, &expert);
+    assert!(res.is_ok());
+
+    assert_eq!(client.get_status(&expert), ExpertStatus::Banned);
+}
+
+#[test]
+fn test_non_moderator_cannot_verify_expert() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(IdentityRegistryContract, ());
+    let client = IdentityRegistryContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let random = Address::generate(&env);
+    let expert = Address::generate(&env);
+
+    client.init(&admin);
+
+    // Random address (not admin, not moderator) tries to verify — should fail with Unauthorized
+    let uri = String::from_str(&env, "ipfs://unauth");
+    let res = client.try_add_expert(&random, &expert, &uri, &0u32);
+    assert_eq!(res, Err(Ok(RegistryError::Unauthorized)));
+}
+
+#[test]
+fn test_remove_moderator() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(IdentityRegistryContract, ());
+    let client = IdentityRegistryContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let moderator = Address::generate(&env);
+    let expert = Address::generate(&env);
+
+    client.init(&admin);
+    client.add_moderator(&moderator);
+
+    // Verify moderator is set
+    env.as_contract(&contract_id, || {
+        assert!(storage::is_moderator(&env, &moderator));
+    });
+
+    // Remove the moderator
+    client.remove_moderator(&moderator);
+
+    // After removal, moderator can no longer verify experts
+    let uri = String::from_str(&env, "ipfs://removed-mod");
+    let res = client.try_add_expert(&moderator, &expert, &uri, &0u32);
+    assert_eq!(res, Err(Ok(RegistryError::Unauthorized)));
+}
+
+#[test]
+fn test_category_id_persisted_and_updated() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(IdentityRegistryContract, ());
+    let client = IdentityRegistryContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let expert = Address::generate(&env);
+
+    client.init(&admin);
+
+    // Add expert with category_id = 5
+    let uri = String::from_str(&env, "ipfs://cat");
+    client.add_expert(&admin, &expert, &uri, &5u32);
+
+    env.as_contract(&contract_id, || {
+        let rec = storage::get_expert_record(&env, &expert);
+        assert_eq!(rec.category_id, 5);
+    });
+
+    // Update profile with new category_id = 10
+    let uri2 = String::from_str(&env, "ipfs://cat2");
+    client.update_profile(&expert, &uri2, &10u32);
+
+    env.as_contract(&contract_id, || {
+        let rec = storage::get_expert_record(&env, &expert);
+        assert_eq!(rec.category_id, 10);
+        assert_eq!(rec.data_uri, uri2);
+    });
+
+    // Ban and verify category_id is preserved
+    client.ban_expert(&admin, &expert);
+
+    env.as_contract(&contract_id, || {
+        let rec = storage::get_expert_record(&env, &expert);
+        assert_eq!(rec.category_id, 10);
+        assert_eq!(rec.status, ExpertStatus::Banned);
+    });
+
+    // Unban and verify category_id is preserved
+    client.unban_expert(&expert);
+
+    env.as_contract(&contract_id, || {
+        let rec = storage::get_expert_record(&env, &expert);
+        assert_eq!(rec.category_id, 10);
+        assert_eq!(rec.status, ExpertStatus::Verified);
+    });
+}

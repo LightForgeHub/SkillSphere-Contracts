@@ -18,4 +18,5 @@ pub struct ExpertRecord {
     pub status: ExpertStatus,
     pub updated_at: u64, // Ledger timestamp of the last change
     pub data_uri: String,
+    pub category_id: u32,
 }

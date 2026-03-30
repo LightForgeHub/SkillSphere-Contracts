@@ -17,4 +17,6 @@ pub enum VaultError {
     SessionAlreadyStarted = 11,
     Overflow = 12,
     FeeTooHigh = 13,
+    BookingNotDisputed = 13,
+    RemainderAlreadyRecovered = 14,
 }
