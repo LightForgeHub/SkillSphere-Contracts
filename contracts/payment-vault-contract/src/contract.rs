@@ -41,6 +41,23 @@ pub fn unpause(env: &Env) -> Result<(), VaultError> {
     Ok(())
 }
 
+pub fn set_fee(env: &Env, new_fee_bps: u32) -> Result<(), VaultError> {
+    let admin = storage::get_admin(env).ok_or(VaultError::NotInitialized)?;
+    admin.require_auth();
+    if new_fee_bps > 2000 {
+        return Err(VaultError::FeeTooHigh);
+    }
+    storage::set_fee_bps(env, new_fee_bps);
+    Ok(())
+}
+
+pub fn set_treasury(env: &Env, treasury: &Address) -> Result<(), VaultError> {
+    let admin = storage::get_admin(env).ok_or(VaultError::NotInitialized)?;
+    admin.require_auth();
+    storage::set_treasury(env, treasury);
+    Ok(())
+}
+
 pub fn set_my_rate(env: &Env, expert: &Address, rate_per_second: i128) -> Result<(), VaultError> {
     expert.require_auth();
 
@@ -221,19 +238,17 @@ pub fn finalize_session(
         return Err(VaultError::BookingNotPending);
     }
 
-    // 4. Calculate payments.
-    // rate_per_second is stored in atomic units of the payment token, so this
-    // multiplication is safe for any token precision as long as the product fits i128.
-    let expert_pay = booking
-        .rate_per_second
-        .checked_mul(actual_duration as i128)
-        .ok_or(VaultError::Overflow)?;
-    let refund = booking.total_deposit - expert_pay;
+    // 4. Calculate payments
+    let gross_expert_pay = booking.rate_per_second * (actual_duration as i128);
+    let refund = booking.total_deposit - gross_expert_pay;
 
-    // Ensure calculations are valid
-    if expert_pay < 0 || refund < 0 {
+    if gross_expert_pay < 0 || refund < 0 {
         return Err(VaultError::InvalidAmount);
     }
+
+    let fee_bps = storage::get_fee_bps(env);
+    let fee_amount = (gross_expert_pay * fee_bps as i128) / 10_000;
+    let expert_net_pay = gross_expert_pay - fee_amount;
 
     // 5. Get token contract
     let token_address = storage::get_token(env);
@@ -241,12 +256,16 @@ pub fn finalize_session(
     let contract_address = env.current_contract_address();
 
     // 6. Execute transfers
-    // Pay expert
-    if expert_pay > 0 {
-        token_client.transfer(&contract_address, &booking.expert, &expert_pay);
+    if fee_amount > 0 {
+        if let Some(treasury) = storage::get_treasury(env) {
+            token_client.transfer(&contract_address, &treasury, &fee_amount);
+        }
     }
 
-    // Refund user
+    if expert_net_pay > 0 {
+        token_client.transfer(&contract_address, &booking.expert, &expert_net_pay);
+    }
+
     if refund > 0 {
         token_client.transfer(&contract_address, &booking.user, &refund);
     }
@@ -255,7 +274,7 @@ pub fn finalize_session(
     storage::update_booking_status(env, booking_id, BookingStatus::Complete);
 
     // 8. Emit SessionFinalized event
-    events::session_finalized(env, booking_id, actual_duration, expert_pay);
+    events::session_finalized(env, booking_id, actual_duration, expert_net_pay, fee_amount);
 
     Ok(())
 }

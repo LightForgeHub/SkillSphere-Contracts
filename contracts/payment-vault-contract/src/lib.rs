@@ -39,6 +39,14 @@ impl PaymentVaultContract {
         contract::unpause(&env)
     }
 
+    pub fn set_fee(env: Env, new_fee_bps: u32) -> Result<(), VaultError> {
+        contract::set_fee(&env, new_fee_bps)
+    }
+
+    pub fn set_treasury(env: Env, treasury: Address) -> Result<(), VaultError> {
+        contract::set_treasury(&env, &treasury)
+    }
+
     /// Transfer admin rights to a new address (Admin-only)
     /// Old admin instantly loses all privileges
     pub fn transfer_admin(env: Env, new_admin: Address) -> Result<(), VaultError> {

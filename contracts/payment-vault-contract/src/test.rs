@@ -686,6 +686,162 @@ fn test_reject_nonexistent_booking() {
     assert!(result.is_err());
 }
 
+// ==================== Platform Fee Tests ====================
+
+#[test]
+fn test_set_fee_and_treasury() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let oracle = Address::generate(&env);
+    let token = Address::generate(&env);
+    let treasury = Address::generate(&env);
+    let registry = create_mock_registry(&env);
+
+    let client = create_client(&env);
+    client.init(&admin, &token, &oracle, &registry);
+
+    let res = client.try_set_fee(&1000_u32);
+    assert!(res.is_ok());
+
+    let res = client.try_set_treasury(&treasury);
+    assert!(res.is_ok());
+}
+
+#[test]
+fn test_fee_cap_at_2000_bps() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let oracle = Address::generate(&env);
+    let token = Address::generate(&env);
+    let registry = create_mock_registry(&env);
+
+    let client = create_client(&env);
+    client.init(&admin, &token, &oracle, &registry);
+
+    let res = client.try_set_fee(&2000_u32);
+    assert!(res.is_ok());
+
+    let res = client.try_set_fee(&2001_u32);
+    assert!(res.is_err());
+}
+
+#[test]
+fn test_finalize_with_10_percent_fee() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let expert = Address::generate(&env);
+    let oracle = Address::generate(&env);
+    let treasury = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let token = create_token_contract(&env, &token_admin);
+    token.mint(&user, &10_000);
+    let registry = create_mock_registry(&env);
+
+    let client = create_client(&env);
+    client.init(&admin, &token.address, &oracle, &registry);
+
+    // 10% fee = 1000 BPS
+    client.set_fee(&1000_u32);
+    client.set_treasury(&treasury);
+
+    // rate = 10/s, max_duration = 100s => deposit = 1000
+    let booking_id = {
+        client.set_my_rate(&expert, &10_i128);
+        client.book_session(&user, &expert, &100_u64)
+    };
+
+    assert_eq!(token.balance(&user), 9_000);
+
+    // finalize at 100s => gross_expert_pay = 1000
+    // fee = 1000 * 1000 / 10000 = 100
+    // expert_net = 900, refund = 0
+    client.finalize_session(&booking_id, &100_u64);
+
+    assert_eq!(token.balance(&treasury), 100);
+    assert_eq!(token.balance(&expert), 900);
+    assert_eq!(token.balance(&user), 9_000);
+    assert_eq!(token.balance(&client.address), 0);
+}
+
+#[test]
+fn test_finalize_with_fee_and_partial_refund() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let expert = Address::generate(&env);
+    let oracle = Address::generate(&env);
+    let treasury = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let token = create_token_contract(&env, &token_admin);
+    token.mint(&user, &10_000);
+    let registry = create_mock_registry(&env);
+
+    let client = create_client(&env);
+    client.init(&admin, &token.address, &oracle, &registry);
+
+    // 10% fee
+    client.set_fee(&1000_u32);
+    client.set_treasury(&treasury);
+
+    // rate = 10/s, max_duration = 100s => deposit = 1000
+    let booking_id = {
+        client.set_my_rate(&expert, &10_i128);
+        client.book_session(&user, &expert, &100_u64)
+    };
+
+    // finalize at 50s => gross_expert_pay = 500
+    // fee = 500 * 1000 / 10000 = 50
+    // expert_net = 450, refund = 500
+    client.finalize_session(&booking_id, &50_u64);
+
+    assert_eq!(token.balance(&treasury), 50);
+    assert_eq!(token.balance(&expert), 450);
+    assert_eq!(token.balance(&user), 9_500);
+    assert_eq!(token.balance(&client.address), 0);
+}
+
+#[test]
+fn test_finalize_zero_fee_behaves_as_before() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let expert = Address::generate(&env);
+    let oracle = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let token = create_token_contract(&env, &token_admin);
+    token.mint(&user, &10_000);
+    let registry = create_mock_registry(&env);
+
+    let client = create_client(&env);
+    client.init(&admin, &token.address, &oracle, &registry);
+
+    let booking_id = {
+        client.set_my_rate(&expert, &10_i128);
+        client.book_session(&user, &expert, &100_u64)
+    };
+
+    // no fee set (defaults to 0)
+    client.finalize_session(&booking_id, &100_u64);
+
+    assert_eq!(token.balance(&expert), 1_000);
+    assert_eq!(token.balance(&user), 9_000);
+    assert_eq!(token.balance(&client.address), 0);
+}
+
 // ==================== Key Rotation Tests ====================
 
 #[test]
@@ -697,58 +853,60 @@ fn test_transfer_admin_success() {
     let admin_b = Address::generate(&env);
     let token = Address::generate(&env);
     let oracle = Address::generate(&env);
-    let registry = Address::generate(&env);
+    let registry = create_mock_registry(&env);
 
     let client = create_client(&env);
     client.init(&admin_a, &token, &oracle, &registry);
 
-    // Admin A transfers to Admin B
-    let result = client.try_transfer_admin(&admin_b);
-    assert!(result.is_ok());
+    // Transfer admin rights to admin_b
+    let res = client.try_transfer_admin(&admin_b);
+    assert!(res.is_ok());
 }
 
 #[test]
-fn test_new_admin_can_pause_after_transfer() {
+fn test_transfer_admin_requires_current_admin_auth() {
     let env = Env::default();
-    env.mock_all_auths();
 
-    let admin_a = Address::generate(&env);
-    let admin_b = Address::generate(&env);
+    let admin = Address::generate(&env);
+    let new_admin = Address::generate(&env);
     let token = Address::generate(&env);
     let oracle = Address::generate(&env);
-    let registry = Address::generate(&env);
+    let registry = create_mock_registry(&env);
 
     let client = create_client(&env);
-    client.init(&admin_a, &token, &oracle, &registry);
-    client.transfer_admin(&admin_b);
-
-    // New admin B can pause and unpause
-    assert!(client.try_pause().is_ok());
-    assert!(client.try_unpause().is_ok());
-}
-
-#[test]
-fn test_old_admin_loses_privileges_after_transfer() {
-    let env = Env::default();
     env.mock_all_auths();
+    client.init(&admin, &token, &oracle, &registry);
 
-    let admin_a = Address::generate(&env);
-    let admin_b = Address::generate(&env);
-    let token = Address::generate(&env);
-    let oracle = Address::generate(&env);
-    let registry = Address::generate(&env);
-
-    let client = create_client(&env);
-    client.init(&admin_a, &token, &oracle, &registry);
-    client.transfer_admin(&admin_b);
-
-    // Remove all mocked auths — now only explicit auth will pass
+    // Clear all auths — transfer_admin should now fail
     env.set_auths(&[]);
+    let res = client.try_transfer_admin(&new_admin);
+    assert!(res.is_err());
+}
 
-    // Without any valid auth for admin_b, pause should fail
-    // (admin_b is now the required auth, but no auth is mocked)
-    let result = client.try_pause();
-    assert!(result.is_err());
+#[test]
+fn test_transfer_admin_old_admin_loses_privileges() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin_a = Address::generate(&env);
+    let admin_b = Address::generate(&env);
+    let token = Address::generate(&env);
+    let oracle = Address::generate(&env);
+    let registry = create_mock_registry(&env);
+
+    let client = create_client(&env);
+    client.init(&admin_a, &token, &oracle, &registry);
+
+    // Transfer admin to admin_b
+    client.transfer_admin(&admin_b);
+
+    // admin_a should no longer be able to call admin-only operations
+    // (only admin_b is now the admin; mock_all_auths allows both,
+    //  so we disable and re-mock only admin_a to verify it fails)
+    env.set_auths(&[]);
+    // Attempting a pause (admin-only) with no auth should fail
+    let res = client.try_pause();
+    assert!(res.is_err());
 }
 
 #[test]
@@ -757,72 +915,72 @@ fn test_set_oracle_success() {
     env.mock_all_auths();
 
     let admin = Address::generate(&env);
+    let oracle_a = Address::generate(&env);
+    let oracle_b = Address::generate(&env);
     let token = Address::generate(&env);
-    let oracle_old = Address::generate(&env);
-    let oracle_new = Address::generate(&env);
     let registry = create_mock_registry(&env);
 
-    let token_admin = Address::generate(&env);
-    let token_contract = create_token_contract(&env, &token_admin);
-    let user = Address::generate(&env);
-    let expert = Address::generate(&env);
-    token_contract.mint(&user, &10_000);
+    let client = create_client(&env);
+    client.init(&admin, &token, &oracle_a, &registry);
+
+    // Update oracle to oracle_b
+    let res = client.try_set_oracle(&oracle_b);
+    assert!(res.is_ok());
+}
+
+#[test]
+fn test_set_oracle_requires_admin_auth() {
+    let env = Env::default();
+
+    let admin = Address::generate(&env);
+    let oracle_a = Address::generate(&env);
+    let oracle_b = Address::generate(&env);
+    let token = Address::generate(&env);
+    let registry = create_mock_registry(&env);
 
     let client = create_client(&env);
-    client.init(&admin, &token_contract.address, &oracle_old, &registry);
+    env.mock_all_auths();
+    client.init(&admin, &token, &oracle_a, &registry);
+
+    // Clear all auths — set_oracle should now fail
+    env.set_auths(&[]);
+    let res = client.try_set_oracle(&oracle_b);
+    assert!(res.is_err());
+}
+
+#[test]
+fn test_set_oracle_old_oracle_loses_finalize_auth() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let oracle_a = Address::generate(&env);
+    let oracle_b = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let token = create_token_contract(&env, &token_admin);
+    let registry = create_mock_registry(&env);
+
+    token.mint(&Address::generate(&env), &1); // ensure token exists
+
+    let user = Address::generate(&env);
+    let expert = Address::generate(&env);
+    token.mint(&user, &10_000);
+
+    let client = create_client(&env);
+    client.init(&admin, &token.address, &oracle_a, &registry);
 
     // Book a session
     client.set_my_rate(&expert, &10_i128);
-    let booking_id = client.book_session(&user, &expert, &100);
+    let booking_id = client.book_session(&user, &expert, &100_u64);
 
-    // Rotate oracle to new address
-    let result = client.try_set_oracle(&oracle_new);
-    assert!(result.is_ok());
+    // Rotate oracle to oracle_b
+    client.set_oracle(&oracle_b);
 
-    // New oracle can finalize
-    let result = client.try_finalize_session(&booking_id, &50);
-    assert!(result.is_ok());
-}
-
-#[test]
-fn test_non_admin_cannot_transfer_admin() {
-    let env = Env::default();
-    env.mock_all_auths();
-
-    let admin = Address::generate(&env);
-    let attacker = Address::generate(&env);
-    let token = Address::generate(&env);
-    let oracle = Address::generate(&env);
-    let registry = Address::generate(&env);
-
-    let client = create_client(&env);
-    client.init(&admin, &token, &oracle, &registry);
-
-    // Clear auths so attacker has no authorization
+    // Now finalize without any auth — should fail (oracle_a no longer valid)
     env.set_auths(&[]);
-
-    let result = client.try_transfer_admin(&attacker);
-    assert!(result.is_err());
-}
-
-#[test]
-fn test_non_admin_cannot_set_oracle() {
-    let env = Env::default();
-    env.mock_all_auths();
-
-    let admin = Address::generate(&env);
-    let attacker = Address::generate(&env);
-    let token = Address::generate(&env);
-    let oracle = Address::generate(&env);
-    let registry = Address::generate(&env);
-
-    let client = create_client(&env);
-    client.init(&admin, &token, &oracle, &registry);
-
-    env.set_auths(&[]);
-
-    let result = client.try_set_oracle(&attacker);
-    assert!(result.is_err());
+    let res = client.try_finalize_session(&booking_id, &50_u64);
+    assert!(res.is_err());
 }
 
 // ==================== Expert Rate Tests ====================

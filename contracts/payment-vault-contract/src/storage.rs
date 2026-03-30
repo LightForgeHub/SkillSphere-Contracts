@@ -12,6 +12,8 @@ pub enum DataKey {
     BookingCounter,          // Counter for generating unique booking IDs
     UserBookings(Address),   // User Address -> Vec<u64> of booking IDs
     ExpertBookings(Address), // Expert Address -> Vec<u64> of booking IDs
+    FeeBps,
+    Treasury,
     IsPaused,                // Circuit breaker flag
     // ── Indexed User Booking List ──────────────────────────────────────────
     // Replaces the old Vec<u64> approach with O(1) per-write composite keys.
@@ -230,4 +232,25 @@ pub fn get_expert_rate(env: &Env, expert: &Address) -> Option<i128> {
     env.storage()
         .persistent()
         .get(&DataKey::ExpertRate(expert.clone()))
+}
+
+// --- Fee BPS ---
+pub fn set_fee_bps(env: &Env, fee_bps: u32) {
+    env.storage().instance().set(&DataKey::FeeBps, &fee_bps);
+}
+
+pub fn get_fee_bps(env: &Env) -> u32 {
+    env.storage()
+        .instance()
+        .get(&DataKey::FeeBps)
+        .unwrap_or(0)
+}
+
+// --- Treasury ---
+pub fn set_treasury(env: &Env, treasury: &Address) {
+    env.storage().instance().set(&DataKey::Treasury, treasury);
+}
+
+pub fn get_treasury(env: &Env) -> Option<Address> {
+    env.storage().instance().get(&DataKey::Treasury)
 }

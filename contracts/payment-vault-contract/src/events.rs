@@ -15,9 +15,9 @@ pub fn booking_created(
 }
 
 /// Emitted when a session is finalized
-pub fn session_finalized(env: &Env, booking_id: u64, actual_duration: u64, total_cost: i128) {
+pub fn session_finalized(env: &Env, booking_id: u64, actual_duration: u64, expert_pay: i128, fee_amount: i128) {
     let topics = (symbol_short!("finalized"), booking_id);
-    env.events().publish(topics, (actual_duration, total_cost));
+    env.events().publish(topics, (actual_duration, expert_pay, fee_amount));
 }
 
 pub fn session_reclaimed(env: &Env, booking_id: u64, amount: i128) {
