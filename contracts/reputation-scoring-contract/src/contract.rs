@@ -49,3 +49,33 @@ pub fn upgrade_contract(env: &Env, new_wasm_hash: BytesN<32>) -> Result<(), Repu
     env.deployer().update_current_contract_wasm(new_wasm_hash);
     Ok(())
 }
+
+pub fn penalize_expert(
+    env: &Env,
+    expert: &Address,
+    penalty_points: u64,
+) -> Result<(), ReputationError> {
+    // Verify contract is initialized
+    let admin = storage::get_admin(env).ok_or(ReputationError::NotInitialized)?;
+
+    // Require auth from admin (vault authorization is handled through admin)
+    admin.require_auth();
+
+    // Get current score
+    let current_score = storage::get_expert_score(env, expert);
+
+    // Subtract penalty points, floor at 0 (prevent underflow)
+    let new_score = if current_score > penalty_points {
+        current_score - penalty_points
+    } else {
+        0
+    };
+
+    // Update score (do not increment review count)
+    storage::set_expert_score(env, expert, new_score);
+
+    // Emit event
+    events::expert_penalized(env, expert, penalty_points, new_score);
+
+    Ok(())
+}

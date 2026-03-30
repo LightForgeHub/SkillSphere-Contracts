@@ -35,4 +35,12 @@ impl ReputationScoringContract {
     pub fn upgrade_contract(env: Env, new_wasm_hash: BytesN<32>) -> Result<(), ReputationError> {
         contract::upgrade_contract(&env, new_wasm_hash)
     }
+
+    pub fn penalize_expert(
+        env: Env,
+        expert: Address,
+        penalty_points: u64,
+    ) -> Result<(), ReputationError> {
+        contract::penalize_expert(&env, &expert, penalty_points)
+    }
 }

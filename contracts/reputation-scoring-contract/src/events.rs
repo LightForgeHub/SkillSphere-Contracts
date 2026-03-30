@@ -13,3 +13,10 @@ pub fn admin_transferred(env: &Env, old_admin: &Address, new_admin: &Address) {
     env.events()
         .publish(topics, (old_admin.clone(), new_admin.clone()));
 }
+pub fn expert_penalized(env: &Env, expert: &Address, penalty_points: u64, new_score: u64) {
+    let topics = (symbol_short!("penalized"),);
+    env.events().publish(
+        topics,
+        (expert.clone(), penalty_points, new_score),
+    );
+}
