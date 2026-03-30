@@ -13,5 +13,8 @@ pub enum VaultError {
     ReclaimTooEarly = 7,
     ContractPaused = 8,
     ExpertRateNotSet = 9,
-    FeeTooHigh = 11,
+    ExpertNotVerified = 10,
+    SessionAlreadyStarted = 11,
+    Overflow = 12,
+    FeeTooHigh = 13,
 }
