@@ -1,7 +1,7 @@
 use crate::events;
 use crate::storage;
 use crate::{error::RegistryError, types::ExpertStatus};
-use soroban_sdk::{Address, Env, String, Vec};
+use soroban_sdk::{Address, BytesN, Env, String, Vec};
 
 /// Initialize the registry with an admin address
 pub fn initialize_registry(env: &Env, admin: &Address) -> Result<(), RegistryError> {
@@ -276,5 +276,25 @@ pub fn get_experts_paginated(env: &Env, start_index: u64, limit: u64) -> Vec<Add
     }
 
     experts
+}
+
+/// Upgrade the contract WASM code (Admin only)
+/// This allows hot-swapping the contract logic while preserving all state
+pub fn upgrade_contract(env: &Env, new_wasm_hash: BytesN<32>) -> Result<(), RegistryError> {
+    // Only admin can upgrade the contract
+    let admin = storage::get_admin(env).ok_or(RegistryError::NotInitialized)?;
+    admin.require_auth();
+
+    // Validate that the WASM hash is not empty (basic validation)
+    if new_wasm_hash.to_array().iter().all(|&b| b == 0) {
+        return Err(RegistryError::InvalidWasmHash);
+    }
+
+    // Perform the upgrade using Soroban's built-in upgrade functionality
+    // Note: In test environments, this may not actually perform the upgrade
+    // but the function call should succeed for testing purposes
+    env.deployer().update_current_contract_wasm(new_wasm_hash);
+
+    Ok(())
 }
 
