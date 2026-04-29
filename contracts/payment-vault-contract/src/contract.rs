@@ -2,7 +2,7 @@ use crate::error::VaultError;
 use crate::events;
 use crate::storage;
 use crate::types::{BookingRecord, BookingStatus};
-use soroban_sdk::{token, Address, Env, Symbol};
+use soroban_sdk::{token, Address, BytesN, Env, Symbol};
 
 pub fn initialize_vault(
     env: &Env,
@@ -367,6 +367,16 @@ pub fn transfer_admin(env: &Env, new_admin: &Address) -> Result<(), VaultError> 
     current_admin.require_auth();
     storage::set_admin(env, new_admin);
     events::admin_transferred(env, &current_admin, new_admin);
+    Ok(())
+}
+
+pub fn upgrade_contract(env: &Env, new_wasm_hash: BytesN<32>) -> Result<(), VaultError> {
+    let admin = storage::get_admin(env).ok_or(VaultError::NotInitialized)?;
+    admin.require_auth();
+
+    env.deployer().update_current_contract_wasm(new_wasm_hash.clone());
+    events::contract_upgraded(env, new_wasm_hash);
+
     Ok(())
 }
 

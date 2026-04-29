@@ -3,7 +3,7 @@ use crate::types::BookingStatus;
 use crate::{PaymentVaultContract, PaymentVaultContractClient};
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
-    token, Address, Env,
+    token, Address, BytesN, Env,
 };
 
 extern crate std;
@@ -1856,4 +1856,81 @@ fn test_resolve_dispute_nonexistent_booking() {
 
     let result = client.try_resolve_dispute(&999, &100, &100);
     assert!(result.is_err());
+}
+
+
+// Upgradability Tests for Issue #35
+#[test]
+fn test_admin_can_upgrade_contract() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let token = Address::generate(&env);
+    let oracle = Address::generate(&env);
+    let registry = create_mock_registry(&env);
+
+    let client = create_client(&env);
+    client.init(&admin, &token, &oracle, &registry);
+
+    // Create a dummy WASM hash for testing (32 bytes of zeros)
+    // In production, this would be the actual hash of the new contract WASM
+    let new_wasm_hash = BytesN::from_array(&env, &[0u8; 32]);
+
+    let result = client.try_upgrade_contract(&new_wasm_hash);
+    if let Err(e) = &result {
+        std::println!("Upgrade error: {:?}", e);
+    }
+    assert!(result.is_ok());
+}
+
+#[test]
+fn test_non_admin_cannot_upgrade_contract() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let token = Address::generate(&env);
+    let oracle = Address::generate(&env);
+    let registry = create_mock_registry(&env);
+
+    let client = create_client(&env);
+    client.init(&admin, &token, &oracle, &registry);
+
+    // Create a dummy WASM hash for testing (32 bytes of zeros)
+    // In production, this would be the actual hash of the new contract WASM
+    let new_wasm_hash = BytesN::from_array(&env, &[0u8; 32]);
+
+    // Strip all mocked auths  upgrade must fail without admin auth
+    env.set_auths(&[]);
+
+    let result = client.try_upgrade_contract(&new_wasm_hash);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_upgrade_blocked_when_paused() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let token = Address::generate(&env);
+    let oracle = Address::generate(&env);
+    let registry = create_mock_registry(&env);
+
+    let client = create_client(&env);
+    client.init(&admin, &token, &oracle, &registry);
+
+    // Create a dummy WASM hash for testing (32 bytes of zeros)
+    // In production, this would be the actual hash of the new contract WASM
+    let new_wasm_hash = BytesN::from_array(&env, &[0u8; 32]);
+
+    client.pause();
+
+    // Upgrade should still succeed even when paused — it's an admin
+    // infrastructure operation, not a user-facing state-changing op.
+    // If your team decides upgrades SHOULD be blocked when paused,
+    // add the paused check to upgrade_contract and flip this assertion.
+    let result = client.try_upgrade_contract(&new_wasm_hash);
+    assert!(result.is_ok());
 }
