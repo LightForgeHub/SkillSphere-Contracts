@@ -1878,7 +1878,7 @@ fn test_admin_can_upgrade_contract() {
     client.init(&admin, &token, &oracle, &registry);
 
     // Create a dummy WASM hash for testing (32 bytes of zeros)
-    // In production, this would be the actual hash of the new contract WASM
+    // In production, this would be the actual hash from Deployer::upload_contract_wasm()
     let new_wasm_hash = BytesN::from_array(&env, &[0u8; 32]);
 
     let result = client.try_upgrade_contract(&new_wasm_hash);
@@ -1902,7 +1902,7 @@ fn test_non_admin_cannot_upgrade_contract() {
     client.init(&admin, &token, &oracle, &registry);
 
     // Create a dummy WASM hash for testing (32 bytes of zeros)
-    // In production, this would be the actual hash of the new contract WASM
+    // In production, this would be the actual hash from Deployer::upload_contract_wasm()
     let new_wasm_hash = BytesN::from_array(&env, &[0u8; 32]);
 
     // Strip all mocked auths  upgrade must fail without admin auth
@@ -1927,7 +1927,7 @@ fn test_upgrade_blocked_when_paused() {
     client.init(&admin, &token, &oracle, &registry);
 
     // Create a dummy WASM hash for testing (32 bytes of zeros)
-    // In production, this would be the actual hash of the new contract WASM
+    // In production, this would be the actual hash from Deployer::upload_contract_wasm()
     let new_wasm_hash = BytesN::from_array(&env, &[0u8; 32]);
 
     client.pause();
