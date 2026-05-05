@@ -92,6 +92,14 @@ impl PaymentVaultContract {
         contract::finalize_session(&env, booking_id, actual_duration)
     }
 
+    /// Allows hot-swapping contract logic without migrating on-chain state.
+   pub fn upgrade_contract(
+    env: Env,
+    new_wasm_hash: soroban_sdk::BytesN<32>,
+) -> Result<(), VaultError> {
+    contract::upgrade_contract(&env, new_wasm_hash)
+}
+
     /// Reclaim funds from a stale booking (User-only).
     /// Users can reclaim their deposit if the booking has been pending for more than 24 hours.
     pub fn reclaim_stale_session(
