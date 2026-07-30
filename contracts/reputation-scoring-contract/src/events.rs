@@ -13,10 +13,23 @@ pub fn admin_transferred(env: &Env, old_admin: &Address, new_admin: &Address) {
     env.events()
         .publish(topics, (old_admin.clone(), new_admin.clone()));
 }
+
+/// Emitted when an expert is penalized following a dispute resolution.
 pub fn expert_penalized(env: &Env, expert: &Address, penalty_points: u64, new_score: u64) {
     let topics = (symbol_short!("penalized"),);
-    env.events().publish(
-        topics,
-        (expert.clone(), penalty_points, new_score),
-    );
+    env.events()
+        .publish(topics, (expert.clone(), penalty_points, new_score));
+}
+
+/// Emitted when a review is submitted.
+pub fn review_submitted(
+    env: &Env,
+    booking_id: u64,
+    reviewer: &Address,
+    expert: &Address,
+    score: u32,
+) {
+    let topics = (symbol_short!("review"),);
+    env.events()
+        .publish(topics, (booking_id, reviewer.clone(), expert.clone(), score));
 }
