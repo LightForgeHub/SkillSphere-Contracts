@@ -1,7 +1,7 @@
 use crate::events;
 use crate::storage;
 use crate::{error::RegistryError, types::ExpertStatus};
-use soroban_sdk::{Address, Env, String, Vec};
+use soroban_sdk::{Address, BytesN, Env, String, Vec};
 
 /// Initialize the registry with an admin address
 pub fn initialize_registry(env: &Env, admin: &Address) -> Result<(), RegistryError> {
@@ -74,6 +74,14 @@ pub fn remove_moderator(env: &Env, moderator: &Address) -> Result<(), RegistryEr
     let admin = storage::get_admin(env).ok_or(RegistryError::NotInitialized)?;
     admin.require_auth();
     storage::remove_moderator(env, moderator);
+    Ok(())
+}
+
+/// Upgrade the current contract WASM to a new published version (Admin only)
+pub fn upgrade_contract(env: &Env, new_wasm_hash: BytesN<32>) -> Result<(), RegistryError> {
+    let admin = storage::get_admin(env).ok_or(RegistryError::NotInitialized)?;
+    admin.require_auth();
+    env.deployer().update_current_contract_wasm(new_wasm_hash);
     Ok(())
 }
 

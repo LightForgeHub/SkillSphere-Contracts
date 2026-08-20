@@ -10,7 +10,7 @@ mod types;
 
 use crate::error::RegistryError;
 use crate::types::ExpertStatus;
-use soroban_sdk::{contract, contractimpl, Address, Env, String, Vec};
+use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, String, Vec};
 
 #[contract]
 pub struct IdentityRegistryContract;
@@ -30,6 +30,10 @@ impl IdentityRegistryContract {
     /// Remove a moderator (Admin only)
     pub fn remove_moderator(env: Env, moderator: Address) -> Result<(), RegistryError> {
         contract::remove_moderator(&env, &moderator)
+    }
+
+    pub fn upgrade_contract(env: Env, new_wasm_hash: BytesN<32>) -> Result<(), RegistryError> {
+        contract::upgrade_contract(&env, new_wasm_hash)
     }
 
     /// Batch Add an expert to the whitelist (Admin only)

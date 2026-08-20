@@ -7,7 +7,7 @@ use crate::{storage, types::ExpertStatus};
 use crate::{IdentityRegistryContract, IdentityRegistryContractClient};
 use soroban_sdk::testutils::{AuthorizedFunction, AuthorizedInvocation, Events};
 use soroban_sdk::{
-    testutils::Address as _, vec, Address, Env, IntoVal, String, Symbol, TryIntoVal,
+    testutils::Address as _, vec, Address, BytesN, Env, IntoVal, String, Symbol, TryIntoVal,
 };
 
 #[test]
@@ -44,6 +44,37 @@ fn test_data_uri_persisted_on_verify() {
     client.add_expert(&admin, &expert, &uri, &0u32);
 
     // Read storage as contract and assert data_uri persisted
+    env.as_contract(&contract_id, || {
+        let rec = storage::get_expert_record(&env, &expert);
+        assert_eq!(rec.data_uri, uri);
+    });
+}
+
+#[test]
+fn test_upgrade_contract_preserves_expert_directory_state() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(IdentityRegistryContract, ());
+    let client = IdentityRegistryContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let expert = Address::generate(&env);
+    let uri = String::from_str(&env, "ipfs://preserved");
+
+    client.init(&admin);
+    client.add_expert(&admin, &expert, &uri, &0u32);
+
+    assert_eq!(client.get_status(&expert), ExpertStatus::Verified);
+    assert_eq!(client.get_expert_by_index(&0u64), expert.clone());
+
+    let new_wasm_hash = BytesN::from_array(&env, &[1u8; 32]);
+    let res = client.try_upgrade_contract(&new_wasm_hash);
+    assert!(res.is_ok());
+
+    assert_eq!(client.get_status(&expert), ExpertStatus::Verified);
+    assert_eq!(client.get_expert_by_index(&0u64), expert.clone());
+
     env.as_contract(&contract_id, || {
         let rec = storage::get_expert_record(&env, &expert);
         assert_eq!(rec.data_uri, uri);
