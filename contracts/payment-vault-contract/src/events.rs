@@ -1,5 +1,5 @@
 #![allow(deprecated)]
-use soroban_sdk::{symbol_short, Address, Env};
+use soroban_sdk::{symbol_short, Address, BytesN, Env};
 
 /// Emitted when a new booking is created
 pub fn booking_created(
@@ -86,4 +86,11 @@ pub fn dispute_resolved(env: &Env, booking_id: u64, user_refund: i128, expert_pa
 pub fn disputed_remainder_recovered(env: &Env, booking_id: u64, amount: i128) {
     let topics = (symbol_short!("dsp_rcvr"), booking_id);
     env.events().publish(topics, amount);
+}
+
+
+/// Emitted when the contract WASM is upgraded
+pub fn contract_upgraded(env: &Env, new_wasm_hash: BytesN<32>) {
+    let topics = (symbol_short!("upgraded"),);
+    env.events().publish(topics, new_wasm_hash);
 }
