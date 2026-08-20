@@ -20,4 +20,7 @@ pub enum RegistryError {
     UriTooLong = 9,
     NotBanned = 10,
     Unauthorized = 11,
+
+    // Upgrade Errors
+    InvalidWasmHash = 12,
 }

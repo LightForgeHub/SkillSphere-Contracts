@@ -109,4 +109,10 @@ impl IdentityRegistryContract {
         contract::get_experts_paginated(&env, start_index, limit)
     }
 
+    /// Upgrade the contract WASM code (Admin only)
+    /// Allows hot-swapping the contract logic while preserving all state
+    pub fn upgrade_contract(env: Env, new_wasm_hash: BytesN<32>) -> Result<(), RegistryError> {
+        contract::upgrade_contract(&env, new_wasm_hash)
+    }
+
 }
