@@ -7,5 +7,9 @@ pub enum ReputationError {
     NotInitialized = 1,
     AlreadyInitialized = 2,
     ContractPaused = 3,
+    InvalidScore = 4,
+    BookingNotComplete = 5,
+    AlreadyReviewed = 6,
+    NotBookingUser = 7,
     NotAuthorized = 8,
 }
