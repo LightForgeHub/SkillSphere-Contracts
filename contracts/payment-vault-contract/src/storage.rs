@@ -5,14 +5,14 @@ use soroban_sdk::{contracttype, Address, Env};
 #[derive(Clone)]
 pub enum DataKey {
     Admin,
-    Token,
     Oracle,
-    RegistryAddress,        
-    Booking(u64),            // Booking ID -> BookingRecord
-    BookingCounter,          // Counter for generating unique booking IDs
-    UserBookings(Address),   // User Address -> Vec<u64> of booking IDs
-    ExpertBookings(Address), // Expert Address -> Vec<u64> of booking IDs
-    IsPaused,                // Circuit breaker flag
+    RegistryAddress,
+    Booking(u64),              // Booking ID -> BookingRecord
+    BookingCounter,            // Counter for generating unique booking IDs
+    UserBookings(Address),     // User Address -> Vec<u64> of booking IDs
+    ExpertBookings(Address),   // Expert Address -> Vec<u64> of booking IDs
+    IsPaused,                  // Circuit breaker flag
+    AllowedToken(Address),     // Address -> bool; true = whitelisted payment token
     // ── Indexed User Booking List ──────────────────────────────────────────
     // Replaces the old Vec<u64> approach with O(1) per-write composite keys.
     UserBooking(Address, u32), // (user, index) -> booking_id
@@ -20,7 +20,7 @@ pub enum DataKey {
     // ── Indexed Expert Booking List ────────────────────────────────────────
     ExpertBooking(Address, u32), // (expert, index) -> booking_id
     ExpertBookingCount(Address), // expert -> total count (u32)
-    ExpertRate(Address),     // Expert Address -> rate per second (i128)
+    ExpertRate(Address),       // Expert Address -> rate per second (i128)
 }
 
 // --- Admin ---
@@ -37,13 +37,29 @@ pub fn get_admin(env: &Env) -> Option<Address> {
     env.storage().instance().get(&DataKey::Admin)
 }
 
-// --- Token (USDC/XLM) ---
-pub fn set_token(env: &Env, token: &Address) {
-    env.storage().instance().set(&DataKey::Token, token);
+// --- Allowed Payment Tokens ---
+
+/// Whitelist a token address so users can book sessions with it.
+pub fn add_allowed_token(env: &Env, token: &Address) {
+    env.storage()
+        .instance()
+        .set(&DataKey::AllowedToken(token.clone()), &true);
 }
 
-pub fn get_token(env: &Env) -> Address {
-    env.storage().instance().get(&DataKey::Token).unwrap()
+/// Remove a token from the whitelist.
+/// Does nothing if the token was not previously allowed.
+pub fn remove_allowed_token(env: &Env, token: &Address) {
+    env.storage()
+        .instance()
+        .remove(&DataKey::AllowedToken(token.clone()));
+}
+
+/// Returns true if the given token is on the whitelist.
+pub fn is_token_allowed(env: &Env, token: &Address) -> bool {
+    env.storage()
+        .instance()
+        .get::<DataKey, bool>(&DataKey::AllowedToken(token.clone()))
+        .unwrap_or(false)
 }
 
 // --- Oracle (Backend) ---

@@ -18,7 +18,8 @@ pub fn initialize_vault(
 
     // 2. Save State
     storage::set_admin(env, admin);
-    storage::set_token(env, token);
+    // Seed the first allowed payment token so the vault is immediately usable
+    storage::add_allowed_token(env, token);
     storage::set_oracle(env, oracle);
     storage::set_registry_address(env, registry);
 
@@ -41,6 +42,24 @@ pub fn unpause(env: &Env) -> Result<(), VaultError> {
     Ok(())
 }
 
+/// Whitelist a new payment token (Admin-only).
+/// Once added, users may book sessions using this token.
+pub fn add_payment_token(env: &Env, token: &Address) -> Result<(), VaultError> {
+    let admin = storage::get_admin(env).ok_or(VaultError::NotInitialized)?;
+    admin.require_auth();
+    storage::add_allowed_token(env, token);
+    Ok(())
+}
+
+/// Remove a previously whitelisted payment token (Admin-only).
+/// Existing bookings using this token are unaffected; only new bookings are blocked.
+pub fn remove_payment_token(env: &Env, token: &Address) -> Result<(), VaultError> {
+    let admin = storage::get_admin(env).ok_or(VaultError::NotInitialized)?;
+    admin.require_auth();
+    storage::remove_allowed_token(env, token);
+    Ok(())
+}
+
 pub fn set_my_rate(env: &Env, expert: &Address, rate_per_second: i128) -> Result<(), VaultError> {
     expert.require_auth();
 
@@ -59,6 +78,7 @@ pub fn book_session(
     user: &Address,
     expert: &Address,
     max_duration: u64,
+    payment_token: &Address,
 ) -> Result<u64, VaultError> {
     if storage::is_paused(env) {
         return Err(VaultError::ContractPaused);
@@ -66,6 +86,11 @@ pub fn book_session(
 
     // Require authorization from the user creating the booking
     user.require_auth();
+
+    // Verify the requested payment token is whitelisted
+    if !storage::is_token_allowed(env, payment_token) {
+        return Err(VaultError::TokenNotAllowed);
+    }
 
     // Verify expert is verified via Identity Registry cross-contract call
     let registry_address = storage::get_registry_address(env).ok_or(VaultError::NotInitialized)?;
@@ -99,11 +124,8 @@ pub fn book_session(
         return Err(VaultError::InvalidAmount);
     }
 
-    // Get the token contract
-    let token_address = storage::get_token(env);
-    let token_client = token::Client::new(env, &token_address);
-
-    // Transfer tokens from user to this contract
+    // Transfer tokens from user to this contract using the chosen payment token
+    let token_client = token::Client::new(env, payment_token);
     let contract_address = env.current_contract_address();
     token_client.transfer(user, &contract_address, &total_deposit);
 
@@ -113,6 +135,7 @@ pub fn book_session(
         id: booking_id,
         user: user.clone(),
         expert: expert.clone(),
+        token_address: payment_token.clone(),
         rate_per_second,
         max_duration,
         total_deposit,
@@ -173,9 +196,8 @@ pub fn top_up_session(
         return Err(VaultError::InvalidAmount);
     }
 
-    // Get the token contract
-    let token_address = storage::get_token(env);
-    let token_client = token::Client::new(env, &token_address);
+    // Get the token contract using the token stored in the booking
+    let token_client = token::Client::new(env, &booking.token_address);
 
     // Transfer extra tokens from user to this contract
     let contract_address = env.current_contract_address();
@@ -235,9 +257,8 @@ pub fn finalize_session(
         return Err(VaultError::InvalidAmount);
     }
 
-    // 5. Get token contract
-    let token_address = storage::get_token(env);
-    let token_client = token::Client::new(env, &token_address);
+    // 5. Get token contract from the booking record
+    let token_client = token::Client::new(env, &booking.token_address);
     let contract_address = env.current_contract_address();
 
     // 6. Execute transfers
@@ -291,8 +312,7 @@ pub fn reclaim_stale_session(env: &Env, user: &Address, booking_id: u64) -> Resu
     }
 
     // 6. Transfer total_deposit back to user
-    let token_address = storage::get_token(env);
-    let token_client = token::Client::new(env, &token_address);
+    let token_client = token::Client::new(env, &booking.token_address);
     let contract_address = env.current_contract_address();
     token_client.transfer(&contract_address, &booking.user, &booking.total_deposit);
 
@@ -351,8 +371,7 @@ pub fn cancel_booking(env: &Env, user: &Address, booking_id: u64) -> Result<(), 
         return Err(VaultError::SessionAlreadyStarted);
     }
 
-    let token_address = storage::get_token(env);
-    let token_client = token::Client::new(env, &token_address);
+    let token_client = token::Client::new(env, &booking.token_address);
     let contract_address = env.current_contract_address();
     token_client.transfer(&contract_address, &booking.user, &booking.total_deposit);
 
@@ -411,8 +430,7 @@ pub fn reject_session(env: &Env, expert: &Address, booking_id: u64) -> Result<()
     }
 
     // 5. Transfer total_deposit back to user
-    let token_address = storage::get_token(env);
-    let token_client = token::Client::new(env, &token_address);
+    let token_client = token::Client::new(env, &booking.token_address);
     let contract_address = env.current_contract_address();
     token_client.transfer(&contract_address, &booking.user, &booking.total_deposit);
 
@@ -462,9 +480,8 @@ pub fn resolve_dispute(
         return Err(VaultError::InvalidAmount);
     }
 
-    // 5. Get token contract
-    let token_address = storage::get_token(env);
-    let token_client = token::Client::new(env, &token_address);
+    // 5. Get token contract from the booking record
+    let token_client = token::Client::new(env, &booking.token_address);
     let contract_address = env.current_contract_address();
 
     // 6. Execute transfers
@@ -522,8 +539,7 @@ pub fn recover_disputed_remainder(env: &Env, booking_id: u64) -> Result<i128, Va
         return Err(VaultError::InvalidAmount);
     }
 
-    let token_address = storage::get_token(env);
-    let token_client = token::Client::new(env, &token_address);
+    let token_client = token::Client::new(env, &booking.token_address);
     let contract_address = env.current_contract_address();
 
     if remainder > 0 {

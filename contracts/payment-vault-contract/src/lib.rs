@@ -39,6 +39,18 @@ impl PaymentVaultContract {
         contract::unpause(&env)
     }
 
+    /// Whitelist a payment token so users can book sessions with it (Admin-only).
+    /// The token passed to `init` is automatically whitelisted at initialization.
+    pub fn add_payment_token(env: Env, token: Address) -> Result<(), VaultError> {
+        contract::add_payment_token(&env, &token)
+    }
+
+    /// Remove a previously whitelisted payment token (Admin-only).
+    /// Existing bookings using this token are unaffected; only new bookings are blocked.
+    pub fn remove_payment_token(env: Env, token: Address) -> Result<(), VaultError> {
+        contract::remove_payment_token(&env, &token)
+    }
+
     /// Transfer admin rights to a new address (Admin-only)
     /// Old admin instantly loses all privileges
     pub fn transfer_admin(env: Env, new_admin: Address) -> Result<(), VaultError> {
@@ -61,14 +73,17 @@ impl PaymentVaultContract {
     /// Book a session with an expert.
     /// User deposits tokens upfront based on rate_per_second * max_duration.
     /// Both `rate_per_second` and the resulting `total_deposit` are denominated in
-    /// atomic units of the configured payment token to correctly handle any token precision.
+    /// atomic units of the chosen `payment_token` to correctly handle any token precision.
+    /// `payment_token` must be on the admin-maintained allowlist; booking fails with
+    /// `TokenNotAllowed` otherwise.
     pub fn book_session(
         env: Env,
         user: Address,
         expert: Address,
         max_duration: u64,
+        payment_token: Address,
     ) -> Result<u64, VaultError> {
-        contract::book_session(&env, &user, &expert, max_duration)
+        contract::book_session(&env, &user, &expert, max_duration, &payment_token)
     }
 
     /// Add more time to a live (or pending) session without disconnecting.

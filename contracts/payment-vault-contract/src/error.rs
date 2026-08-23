@@ -18,4 +18,5 @@ pub enum VaultError {
     Overflow = 12,
     BookingNotDisputed = 13,
     RemainderAlreadyRecovered = 14,
+    TokenNotAllowed = 15,
 }

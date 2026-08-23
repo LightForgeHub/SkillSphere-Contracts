@@ -88,7 +88,7 @@ fn test_partial_duration_scenario() {
     let max_duration = 100_u64;
     let booking_id = {
         client.set_my_rate(&expert, &rate_per_second);
-        client.book_session(&user, &expert, &max_duration)
+        client.book_session(&user, &expert, &max_duration, &token.address)
     };
 
     assert_eq!(token.balance(&user), 9_000);
@@ -124,7 +124,7 @@ fn test_full_duration_no_refund() {
     let max_duration = 100_u64;
     let booking_id = {
         client.set_my_rate(&expert, &rate_per_second);
-        client.book_session(&user, &expert, &max_duration)
+        client.book_session(&user, &expert, &max_duration, &token.address)
     };
 
     let actual_duration = 100_u64;
@@ -157,7 +157,7 @@ fn test_double_finalization_protection() {
     let max_duration = 100_u64;
     let booking_id = {
         client.set_my_rate(&expert, &rate_per_second);
-        client.book_session(&user, &expert, &max_duration)
+        client.book_session(&user, &expert, &max_duration, &token.address)
     };
 
     let actual_duration = 50_u64;
@@ -190,7 +190,7 @@ fn test_oracle_authorization_enforcement() {
     let max_duration = 100_u64;
     let booking_id = {
         client.set_my_rate(&expert, &rate_per_second);
-        client.book_session(&user, &expert, &max_duration)
+        client.book_session(&user, &expert, &max_duration, &token.address)
     };
 
     env.set_auths(&[]);
@@ -226,7 +226,7 @@ fn test_zero_duration_finalization() {
     let max_duration = 100_u64;
     let booking_id = {
         client.set_my_rate(&expert, &rate_per_second);
-        client.book_session(&user, &expert, &max_duration)
+        client.book_session(&user, &expert, &max_duration, &token.address)
     };
 
     let actual_duration = 0_u64;
@@ -283,7 +283,7 @@ fn test_book_session_balance_transfer() {
 
     let booking_id = {
         client.set_my_rate(&expert, &rate_per_second);
-        client.book_session(&user, &expert, &max_duration)
+        client.book_session(&user, &expert, &max_duration, &token.address)
     };
 
     assert_eq!(token.balance(&user), initial_balance - expected_deposit);
@@ -293,7 +293,7 @@ fn test_book_session_balance_transfer() {
     token.mint(&user, &expected_deposit);
     let booking_id_2 = {
         client.set_my_rate(&expert, &rate_per_second);
-        client.book_session(&user, &expert, &max_duration)
+        client.book_session(&user, &expert, &max_duration, &token.address)
     };
 
     assert_eq!(booking_id_2, 2);
@@ -323,11 +323,11 @@ fn test_get_user_and_expert_bookings() {
     let max_duration = 100_u64;
     let booking_id_1 = {
         client.set_my_rate(&expert1, &rate_per_second);
-        client.book_session(&user, &expert1, &max_duration)
+        client.book_session(&user, &expert1, &max_duration, &token.address)
     };
     let booking_id_2 = {
         client.set_my_rate(&expert2, &rate_per_second);
-        client.book_session(&user, &expert2, &max_duration)
+        client.book_session(&user, &expert2, &max_duration, &token.address)
     };
 
     // Paginated: fetch all 2 user bookings starting at index 0
@@ -386,7 +386,7 @@ fn test_reclaim_stale_session_too_early() {
     let max_duration = 100_u64;
     let booking_id = {
         client.set_my_rate(&expert, &rate_per_second);
-        client.book_session(&user, &expert, &max_duration)
+        client.book_session(&user, &expert, &max_duration, &token.address)
     };
 
     let result = client.try_reclaim_stale_session(&user, &booking_id);
@@ -418,7 +418,7 @@ fn test_reclaim_stale_session_success() {
     let max_duration = 100_u64;
     let booking_id = {
         client.set_my_rate(&expert, &rate_per_second);
-        client.book_session(&user, &expert, &max_duration)
+        client.book_session(&user, &expert, &max_duration, &token.address)
     };
 
     env.ledger()
@@ -455,7 +455,7 @@ fn test_reclaim_stale_session_wrong_user() {
     let max_duration = 100_u64;
     let booking_id = {
         client.set_my_rate(&expert, &rate_per_second);
-        client.book_session(&user, &expert, &max_duration)
+        client.book_session(&user, &expert, &max_duration, &token.address)
     };
 
     env.ledger()
@@ -489,7 +489,7 @@ fn test_reclaim_already_finalized() {
     let max_duration = 100_u64;
     let booking_id = {
         client.set_my_rate(&expert, &rate_per_second);
-        client.book_session(&user, &expert, &max_duration)
+        client.book_session(&user, &expert, &max_duration, &token.address)
     };
 
     client.finalize_session(&booking_id, &50);
@@ -523,7 +523,7 @@ fn test_expert_rejects_pending_session() {
     let max_duration = 100_u64;
     let booking_id = {
         client.set_my_rate(&expert, &rate_per_second);
-        client.book_session(&user, &expert, &max_duration)
+        client.book_session(&user, &expert, &max_duration, &token.address)
     };
 
     assert_eq!(token.balance(&user), 9_000);
@@ -563,7 +563,7 @@ fn test_user_cannot_reject_session() {
     let max_duration = 100_u64;
     let booking_id = {
         client.set_my_rate(&expert, &rate_per_second);
-        client.book_session(&user, &expert, &max_duration)
+        client.book_session(&user, &expert, &max_duration, &token.address)
     };
 
     let result = client.try_reject_session(&user, &booking_id);
@@ -594,7 +594,7 @@ fn test_reject_already_complete_session() {
     let max_duration = 100_u64;
     let booking_id = {
         client.set_my_rate(&expert, &rate_per_second);
-        client.book_session(&user, &expert, &max_duration)
+        client.book_session(&user, &expert, &max_duration, &token.address)
     };
 
     client.finalize_session(&booking_id, &50);
@@ -625,7 +625,7 @@ fn test_reject_already_reclaimed_session() {
     let max_duration = 100_u64;
     let booking_id = {
         client.set_my_rate(&expert, &rate_per_second);
-        client.book_session(&user, &expert, &max_duration)
+        client.book_session(&user, &expert, &max_duration, &token.address)
     };
 
     env.ledger()
@@ -659,7 +659,7 @@ fn test_wrong_expert_cannot_reject() {
     let max_duration = 100_u64;
     let booking_id = {
         client.set_my_rate(&expert, &rate_per_second);
-        client.book_session(&user, &expert, &max_duration)
+        client.book_session(&user, &expert, &max_duration, &token.address)
     };
 
     let result = client.try_reject_session(&wrong_expert, &booking_id);
@@ -773,7 +773,7 @@ fn test_set_oracle_success() {
 
     // Book a session
     client.set_my_rate(&expert, &10_i128);
-    let booking_id = client.book_session(&user, &expert, &100);
+    let booking_id = client.book_session(&user, &expert, &100, &token_contract.address);
 
     // Rotate oracle to new address
     let result = client.try_set_oracle(&oracle_new);
@@ -876,7 +876,7 @@ fn test_book_session_calculates_correct_deposit() {
     let max_duration = 100_u64;
     let expected_deposit = stored_rate * (max_duration as i128);
 
-    let _booking_id = client.book_session(&user, &expert, &max_duration);
+    let _booking_id = client.book_session(&user, &expert, &max_duration, &token.address);
 
     assert_eq!(token.balance(&user), initial_balance - expected_deposit);
     assert_eq!(token.balance(&client.address), expected_deposit);
@@ -901,7 +901,7 @@ fn test_book_session_fails_if_expert_rate_not_set() {
     client.init(&admin, &token.address, &oracle, &registry);
 
     let max_duration = 100_u64;
-    let res = client.try_book_session(&user, &expert, &max_duration);
+    let res = client.try_book_session(&user, &expert, &max_duration, &token.address);
 
     assert!(res.is_err());
 }
@@ -932,7 +932,7 @@ fn test_book_session_fails_if_expert_not_verified() {
 
     // Book session should fail with ExpertNotVerified error
     let max_duration = 100_u64;
-    let res = client.try_book_session(&user, &expert, &max_duration);
+    let res = client.try_book_session(&user, &expert, &max_duration, &token.address);
 
     assert!(res.is_err());
 }
@@ -962,7 +962,7 @@ fn test_pause_blocks_book_session() {
     let result = client.try_pause();
     assert!(result.is_ok());
 
-    let result = client.try_book_session(&user, &expert, &100);
+    let result = client.try_book_session(&user, &expert, &100, &token.address);
     assert!(result.is_err());
 
     assert_eq!(token.balance(&user), 10_000);
@@ -988,7 +988,7 @@ fn test_pause_blocks_finalize_session() {
 
     let booking_id = {
         client.set_my_rate(&expert, &10_i128);
-        client.book_session(&user, &expert, &100)
+        client.book_session(&user, &expert, &100, &token.address)
     };
 
     client.pause();
@@ -1017,7 +1017,7 @@ fn test_pause_blocks_reclaim_stale_session() {
 
     let booking_id = {
         client.set_my_rate(&expert, &10_i128);
-        client.book_session(&user, &expert, &100)
+        client.book_session(&user, &expert, &100, &token.address)
     };
 
     env.ledger()
@@ -1049,7 +1049,7 @@ fn test_pause_blocks_reject_session() {
 
     let booking_id = {
         client.set_my_rate(&expert, &10_i128);
-        client.book_session(&user, &expert, &100)
+        client.book_session(&user, &expert, &100, &token.address)
     };
 
     client.pause();
@@ -1079,13 +1079,13 @@ fn test_unpause_resumes_operations() {
     client.set_my_rate(&expert, &10_i128);
     client.pause();
 
-    let result = client.try_book_session(&user, &expert, &100);
+    let result = client.try_book_session(&user, &expert, &100, &token.address);
     assert!(result.is_err());
 
     let result = client.try_unpause();
     assert!(result.is_ok());
 
-    let booking_id = client.book_session(&user, &expert, &100);
+    let booking_id = client.book_session(&user, &expert, &100, &token.address);
     assert_eq!(booking_id, 1);
     assert_eq!(token.balance(&user), 9_000);
     assert_eq!(token.balance(&client.address), 1_000);
@@ -1111,7 +1111,7 @@ fn test_read_only_functions_work_while_paused() {
 
     let booking_id = {
         client.set_my_rate(&expert, &10_i128);
-        client.book_session(&user, &expert, &100)
+        client.book_session(&user, &expert, &100, &token.address)
     };
 
     client.pause();
@@ -1163,7 +1163,7 @@ fn test_scale_50_bookings_single_user_with_pagination() {
     // Book 50 sessions
     let mut booking_ids = std::vec::Vec::new();
     for _ in 0..50 {
-        let id = client.book_session(&user, &expert, &max_duration);
+        let id = client.book_session(&user, &expert, &max_duration, &token.address);
         booking_ids.push(id);
     }
 
@@ -1224,8 +1224,8 @@ fn test_pagination_isolation_between_users() {
 
     // 25 bookings for user_a then 25 for user_b (interleaved global booking IDs)
     for _ in 0..25 {
-        client.book_session(&user_a, &expert, &1);
-        client.book_session(&user_b, &expert, &1);
+        client.book_session(&user_a, &expert, &1, &token.address);
+        client.book_session(&user_b, &expert, &1, &token.address);
     }
 
     assert_eq!(client.get_user_booking_count(&user_a), 25);
@@ -1272,7 +1272,7 @@ fn test_user_cancels_before_session_starts_success() {
 
     let booking_id = {
         client.set_my_rate(&expert, &10_i128);
-        client.book_session(&user, &expert, &100)
+        client.book_session(&user, &expert, &100, &token.address)
     };
 
     assert_eq!(token.balance(&user), 9_000);
@@ -1311,7 +1311,7 @@ fn test_user_cannot_cancel_after_oracle_marks_started() {
 
     let booking_id = {
         client.set_my_rate(&expert, &10_i128);
-        client.book_session(&user, &expert, &100)
+        client.book_session(&user, &expert, &100, &token.address)
     };
 
     // Oracle marks session as started
@@ -1356,7 +1356,7 @@ fn test_booking_with_18_decimal_token_scale_no_overflow() {
     client.init(&admin, &token.address, &oracle, &registry);
 
     client.set_my_rate(&expert, &rate_per_second);
-    let booking_id = client.book_session(&user, &expert, &max_duration);
+    let booking_id = client.book_session(&user, &expert, &max_duration, &token.address);
 
     assert_eq!(token.balance(&user), 0);
     assert_eq!(token.balance(&client.address), expected_deposit);
@@ -1393,7 +1393,7 @@ fn test_expert_pagination_50_bookings() {
     for _ in 0..50 {
         let user = Address::generate(&env);
         token.mint(&user, &1);
-        client.book_session(&user, &expert, &1);
+        client.book_session(&user, &expert, &1, &token.address);
     }
 
     assert_eq!(client.get_expert_booking_count(&expert), 50);
@@ -1429,7 +1429,7 @@ fn test_top_up_session_success() {
 
     let booking_id = {
         client.set_my_rate(&expert, &rate_per_second);
-        client.book_session(&user, &expert, &initial_duration)
+        client.book_session(&user, &expert, &initial_duration, &token.address)
     };
 
     let initial_deposit = rate_per_second * (initial_duration as i128); // 18,000
@@ -1475,7 +1475,7 @@ fn test_top_up_wrong_user_fails() {
 
     let booking_id = {
         client.set_my_rate(&expert, &rate_per_second);
-        client.book_session(&user, &expert, &initial_duration)
+        client.book_session(&user, &expert, &initial_duration, &token.address)
     };
 
     let result = client.try_top_up_session(&other_user, &booking_id, &900);
@@ -1504,7 +1504,7 @@ fn test_resolve_dispute_admin_splits_funds() {
 
     let booking_id = {
         client.set_my_rate(&expert, &10_i128);
-        client.book_session(&user, &expert, &100)
+        client.book_session(&user, &expert, &100, &token.address)
     };
 
     // Deposit is 1000. Split: 600 to user, 400 to expert.
@@ -1538,7 +1538,7 @@ fn test_resolve_dispute_only_admin_can_call() {
 
     let booking_id = {
         client.set_my_rate(&expert, &10_i128);
-        client.book_session(&user, &expert, &100)
+        client.book_session(&user, &expert, &100, &token.address)
     };
 
     // Clear all mocked auths — now calls requiring auth will fail
@@ -1569,7 +1569,7 @@ fn test_resolve_dispute_split_exceeds_deposit_panics() {
 
     let booking_id = {
         client.set_my_rate(&expert, &10_i128);
-        client.book_session(&user, &expert, &100)
+        client.book_session(&user, &expert, &100, &token.address)
     };
 
     // Deposit is 1000. Split of 600 + 500 = 1100 exceeds deposit.
@@ -1596,7 +1596,7 @@ fn test_resolve_dispute_split_exceeds_deposit_returns_error() {
 
     let booking_id = {
         client.set_my_rate(&expert, &10_i128);
-        client.book_session(&user, &expert, &100)
+        client.book_session(&user, &expert, &100, &token.address)
     };
 
     // Deposit is 1000. Split of 600 + 500 = 1100 exceeds deposit.
@@ -1628,7 +1628,7 @@ fn test_resolve_dispute_negative_split_amounts_return_error() {
 
     let booking_id = {
         client.set_my_rate(&expert, &10_i128);
-        client.book_session(&user, &expert, &100)
+        client.book_session(&user, &expert, &100, &token.address)
     };
 
     let negative_user_refund = client.try_resolve_dispute(&booking_id, &-1, &500);
@@ -1665,7 +1665,7 @@ fn test_resolve_dispute_only_pending_bookings() {
 
     let booking_id = {
         client.set_my_rate(&expert, &10_i128);
-        client.book_session(&user, &expert, &100)
+        client.book_session(&user, &expert, &100, &token.address)
     };
 
     // Finalize first — booking is now Complete
@@ -1696,7 +1696,7 @@ fn test_resolve_dispute_partial_split_leaves_remainder_in_vault() {
 
     let booking_id = {
         client.set_my_rate(&expert, &10_i128);
-        client.book_session(&user, &expert, &100)
+        client.book_session(&user, &expert, &100, &token.address)
     };
 
     // Deposit is 1000. Split only 300 + 200 = 500. Remaining 500 stays in vault
@@ -1728,7 +1728,7 @@ fn test_admin_can_recover_disputed_remainder_once() {
 
     let booking_id = {
         client.set_my_rate(&expert, &10_i128);
-        client.book_session(&user, &expert, &100)
+        client.book_session(&user, &expert, &100, &token.address)
     };
 
     // Deposit is 1000; 500 is intentionally left to recover.
@@ -1768,7 +1768,7 @@ fn test_non_admin_cannot_recover_disputed_remainder() {
 
     let booking_id = {
         client.set_my_rate(&expert, &10_i128);
-        client.book_session(&user, &expert, &100)
+        client.book_session(&user, &expert, &100, &token.address)
     };
 
     client.resolve_dispute(&booking_id, &300, &200);
@@ -1802,7 +1802,7 @@ fn test_recover_disputed_remainder_requires_disputed_status() {
 
     let booking_id = {
         client.set_my_rate(&expert, &10_i128);
-        client.book_session(&user, &expert, &100)
+        client.book_session(&user, &expert, &100, &token.address)
     };
 
     // Booking is still pending, so recovery must fail.
@@ -1830,7 +1830,7 @@ fn test_resolve_dispute_blocked_when_paused() {
 
     let booking_id = {
         client.set_my_rate(&expert, &10_i128);
-        client.book_session(&user, &expert, &100)
+        client.book_session(&user, &expert, &100, &token.address)
     };
 
     client.pause();
@@ -1938,4 +1938,137 @@ fn test_upgrade_blocked_when_paused() {
     // add the paused check to upgrade_contract and flip this assertion.
     let result = client.try_upgrade_contract(&new_wasm_hash);
     assert!(result.is_ok());
+}
+
+// ==================== Multi-Token Tests ====================
+
+/// Admin adds a second token (USDC mock). User books with that token — should succeed.
+#[test]
+fn test_admin_adds_token_user_books_with_it() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let expert = Address::generate(&env);
+    let oracle = Address::generate(&env);
+    let registry = create_mock_registry(&env);
+
+    // Primary token (XLM-like) — registered via init
+    let xlm_admin = Address::generate(&env);
+    let xlm = create_token_contract(&env, &xlm_admin);
+
+    // Secondary token (USDC-like) — registered via add_payment_token
+    let usdc_admin = Address::generate(&env);
+    let usdc = create_token_contract(&env, &usdc_admin);
+
+    // Mint USDC to user only — they pay with USDC
+    usdc.mint(&user, &10_000);
+
+    let client = create_client(&env);
+    client.init(&admin, &xlm.address, &oracle, &registry);
+
+    // Admin whitelists USDC
+    let res = client.try_add_payment_token(&usdc.address);
+    assert!(res.is_ok());
+
+    // Expert sets rate
+    client.set_my_rate(&expert, &10_i128);
+
+    // User books using USDC
+    let max_duration = 100_u64;
+    let booking_id = client.book_session(&user, &expert, &max_duration, &usdc.address);
+
+    // User's USDC was escrowed
+    assert_eq!(usdc.balance(&user), 9_000);
+    assert_eq!(usdc.balance(&client.address), 1_000);
+
+    // Booking records the correct token
+    let booking = client.get_booking(&booking_id).unwrap();
+    assert_eq!(booking.token_address, usdc.address);
+
+    // Finalize — payouts happen in USDC
+    client.finalize_session(&booking_id, &50);
+    assert_eq!(usdc.balance(&expert), 500);
+    assert_eq!(usdc.balance(&user), 9_500);
+    assert_eq!(usdc.balance(&client.address), 0);
+}
+
+/// User tries to book with a token that was never whitelisted — should fail with TokenNotAllowed.
+#[test]
+fn test_book_with_unregistered_token_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let expert = Address::generate(&env);
+    let oracle = Address::generate(&env);
+    let registry = create_mock_registry(&env);
+
+    let xlm_admin = Address::generate(&env);
+    let xlm = create_token_contract(&env, &xlm_admin);
+
+    // A fake token that is never whitelisted
+    let fake_admin = Address::generate(&env);
+    let fake_token = create_token_contract(&env, &fake_admin);
+    fake_token.mint(&user, &10_000);
+
+    let client = create_client(&env);
+    client.init(&admin, &xlm.address, &oracle, &registry);
+
+    // Expert sets rate
+    client.set_my_rate(&expert, &10_i128);
+
+    // Booking with unregistered token must fail
+    let res = client.try_book_session(&user, &expert, &100, &fake_token.address);
+    assert!(res.is_err());
+
+    // No funds should have moved
+    assert_eq!(fake_token.balance(&user), 10_000);
+    assert_eq!(fake_token.balance(&client.address), 0);
+}
+
+/// Admin removes a whitelisted token; subsequent bookings with it must fail,
+/// while existing bookings (already escrowed) still settle correctly.
+#[test]
+fn test_remove_payment_token_blocks_new_bookings_but_not_existing() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let expert = Address::generate(&env);
+    let oracle = Address::generate(&env);
+    let registry = create_mock_registry(&env);
+
+    let usdc_admin = Address::generate(&env);
+    let usdc = create_token_contract(&env, &usdc_admin);
+    usdc.mint(&user, &20_000);
+
+    let xlm_admin = Address::generate(&env);
+    let xlm = create_token_contract(&env, &xlm_admin);
+
+    let client = create_client(&env);
+    client.init(&admin, &xlm.address, &oracle, &registry);
+
+    // Whitelist USDC and book a session
+    client.add_payment_token(&usdc.address);
+    client.set_my_rate(&expert, &10_i128);
+    let booking_id = client.book_session(&user, &expert, &100, &usdc.address);
+    assert_eq!(usdc.balance(&client.address), 1_000);
+
+    // Admin removes USDC from the allowlist
+    let res = client.try_remove_payment_token(&usdc.address);
+    assert!(res.is_ok());
+
+    // New booking with USDC must now fail
+    let new_res = client.try_book_session(&user, &expert, &100, &usdc.address);
+    assert!(new_res.is_err());
+
+    // But the existing booking finalizes correctly — token stored on booking record
+    client.finalize_session(&booking_id, &50);
+    assert_eq!(usdc.balance(&expert), 500);
+    assert_eq!(usdc.balance(&user), 19_500);
+    assert_eq!(usdc.balance(&client.address), 0);
 }
