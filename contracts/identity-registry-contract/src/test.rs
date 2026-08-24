@@ -29,6 +29,70 @@ fn test_initialization() {
 }
 
 #[test]
+fn test_transfer_admin_revokes_previous_admin() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(IdentityRegistryContract, ());
+    let client = IdentityRegistryContractClient::new(&env, &contract_id);
+
+    let admin_a = Address::generate(&env);
+    let admin_b = Address::generate(&env);
+    let expert = Address::generate(&env);
+    let data_uri = String::from_str(&env, "ipfs://transferred-admin");
+
+    client.init(&admin_a);
+    client.transfer_admin(&admin_b);
+
+    let old_admin_result = client.try_add_expert(&admin_a, &expert, &data_uri, &0u32);
+    assert_eq!(old_admin_result, Err(Ok(RegistryError::Unauthorized)));
+
+    client.add_expert(&admin_b, &expert, &data_uri, &0u32);
+    assert_eq!(client.get_status(&expert), ExpertStatus::Verified);
+}
+
+#[test]
+#[should_panic]
+fn test_transfer_admin_requires_current_admin() {
+    let env = Env::default();
+
+    let contract_id = env.register(IdentityRegistryContract, ());
+    let client = IdentityRegistryContractClient::new(&env, &contract_id);
+
+    let admin_a = Address::generate(&env);
+    let admin_b = Address::generate(&env);
+
+    client.init(&admin_a);
+    client.transfer_admin(&admin_b);
+}
+
+#[test]
+fn test_transfer_admin_emits_event() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(IdentityRegistryContract, ());
+    let client = IdentityRegistryContractClient::new(&env, &contract_id);
+
+    let admin_a = Address::generate(&env);
+    let admin_b = Address::generate(&env);
+
+    client.init(&admin_a);
+    client.transfer_admin(&admin_b);
+
+    let events = env.events().all();
+    let event = events.last().unwrap();
+    let topic: Symbol = event.1.get(0).unwrap().try_into_val(&env).unwrap();
+    assert_eq!(topic, Symbol::new(&env, "admin_transferred"));
+    let transferred: crate::events::AdminTransferredEvent = event.2
+        .clone()
+        .try_into_val(&env)
+        .unwrap();
+    assert_eq!(transferred.previous_admin, admin_a);
+    assert_eq!(transferred.new_admin, admin_b);
+}
+
+#[test]
 fn test_data_uri_persisted_on_verify() {
     let env = Env::default();
     env.mock_all_auths();

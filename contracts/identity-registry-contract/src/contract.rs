@@ -14,6 +14,17 @@ pub fn initialize_registry(env: &Env, admin: &Address) -> Result<(), RegistryErr
     Ok(())
 }
 
+/// Transfer admin rights to a new address (Admin only)
+pub fn transfer_admin(env: &Env, new_admin: &Address) -> Result<(), RegistryError> {
+    let current_admin = storage::get_admin(env).ok_or(RegistryError::NotInitialized)?;
+    current_admin.require_auth();
+
+    storage::set_admin(env, new_admin);
+    events::emit_admin_transferred(env, current_admin, new_admin.clone());
+
+    Ok(())
+}
+
 /// Verify an expert by setting their status to Verified (Admin only)
 /// Batch Verification
 pub fn batch_add_experts(env: Env, experts: Vec<Address>) -> Result<(), RegistryError> {
