@@ -46,3 +46,19 @@ pub fn emit_profile_updated(env: &Env, expert: Address, new_uri: String) {
     env.events()
         .publish((Symbol::new(env, "profile_updated"),), event);
 }
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AdminTransferredEvent {
+    pub previous_admin: Address,
+    pub new_admin: Address,
+}
+
+pub fn emit_admin_transferred(env: &Env, previous_admin: Address, new_admin: Address) {
+    let event = AdminTransferredEvent {
+        previous_admin,
+        new_admin,
+    };
+    env.events()
+        .publish((Symbol::new(env, "admin_transferred"),), event);
+}

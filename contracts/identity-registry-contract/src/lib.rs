@@ -22,6 +22,11 @@ impl IdentityRegistryContract {
         contract::initialize_registry(&env, &admin)
     }
 
+    /// Transfer admin rights to a new address (Admin only)
+    pub fn transfer_admin(env: Env, new_admin: Address) -> Result<(), RegistryError> {
+        contract::transfer_admin(&env, &new_admin)
+    }
+
     /// Add a moderator (Admin only)
     pub fn add_moderator(env: Env, moderator: Address) -> Result<(), RegistryError> {
         contract::add_moderator(&env, &moderator)
