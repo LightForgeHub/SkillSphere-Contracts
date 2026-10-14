@@ -4,7 +4,6 @@ target
 # Local settings
 .soroban
 .stellar
-.env
 local-devnet
 .qodo
 
@@ -12,3 +11,5 @@ local-devnet
 test_snapshots/
 *.snap
 *.wasm
+config.bat
+node_modules

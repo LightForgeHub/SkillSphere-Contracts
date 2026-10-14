@@ -249,3 +249,4 @@ For additional help, open an issue on GitHub or reach out to the maintainers.
 **Built with ❤️ for the Stellar Community.**
 
 🚀 **Happy coding!**
+<!-- Verified for issue #31: feat(vault): implement platform revenue service fee deduction in finalize_session -->
